@@ -1,0 +1,349 @@
+/*
+KRAFTMON.C
+Programa monitor (Editor e Loader de memória) para o KRAFT 80
+2025 - ARM Coder
+*/
+
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+#include <ctype.h>
+
+#include "io-kraft80.h"
+
+#pragma codeseg MAIN
+
+#define BUFSIZE 120
+
+////////////////////////////////////////////////////////////////////////////////
+int last_edit = 0x2100;
+int last_dump = 0x2100;
+int last_go = 0x2100;
+
+////////////////////////////////////////////////////////////////////////////////
+void conv_strupr(char *dest, const char *src){
+
+    while (*src){
+    
+        *dest = toupper(*src);
+        src++; dest++;
+    }
+    *dest = 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void filter_buf(char *buf){
+
+    int len = strlen(buf);
+    int i,j;
+
+    if (!buf[0]) return;
+        
+    for (i = 0; i < len; i++)
+        if (buf[i] == 0x09)
+            buf[i] = ' ';
+
+    if (buf[0] == ' '){
+
+        for (i = 0; i < len; i++){
+
+            if (buf[i] != ' '){
+
+                j = 0;
+                while (buf[i]){
+                
+                    buf[j++] = buf[i++];
+                }
+                buf[j] = 0;
+            }
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+int isnibble(char c){
+
+    if ((c >='0') && (c <= '9')) return 1;
+    if ((c >='a') && (c <= 'f')) return 1;
+    if ((c >='A') && (c <= 'F')) return 1;
+
+    return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+uint8_t getnibble(char c){
+
+    if ((c >='0') && (c <= '9')) return c - '0';
+    if ((c >='a') && (c <= 'f')) return c - 'a' + 10;
+    if ((c >='A') && (c <= 'F')) return c - 'A' + 10;
+
+    return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+const char dighex[] = "0123456789ABCDEF";
+void puthex8(char a){
+
+    putchar(dighex[a>>4]);
+    putchar(dighex[a&0x0f]);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+int get_prm16(char *buf){
+
+    filter_buf(buf);
+    int prm = -1;
+    int i;
+    
+    for (i = 0; i < 4; i++){
+
+	if (isnibble(buf[i])){
+	    if (prm == -1)
+	        prm = 0;
+	    prm <<= 4;
+	    prm |= getnibble(buf[i]);
+	}
+	else
+	    break;
+    }
+        
+    return prm;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+char get_prm8(char *buf){
+
+    filter_buf(buf);
+    char prm = 0;
+    int i;
+    
+    for (i = 0; i < 2; i++){
+
+	if (isnibble(buf[i])){
+	    prm <<= 4;
+	    prm |= getnibble(buf[i]);
+	}
+	else
+	    break;
+    }
+        
+    return prm;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void crlf(){
+
+    putstr("\r\n");
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void prompt(){
+
+    crlf();
+    putchar(':');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+int edit_mem(int addr){
+
+    char *p = (char*)addr;
+    char buf[120];
+
+    puthex8(addr>>8);
+    puthex8(addr&0xff);
+    putchar(':');
+
+    lgets(buf,sizeof(buf));
+
+    int i = 0;
+    while(buf[i]){
+
+        filter_buf(buf+i);
+
+        if (!isnibble(buf[i]))
+            break;
+    
+        *p++ = get_prm8(buf+i);
+        i++;
+        if (isnibble(buf[i]))
+            i++;
+        addr++;
+    }
+
+    crlf();
+    
+    return addr;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+int dump_mem(int addr){
+
+#define DUMPLEN 128
+
+    int addr1 = addr;
+    addr &= 0xfff0;
+    char *p = (char*)addr;
+    
+    int i;
+    int cols = 16;    
+    putstr("     0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F\r\n");
+    for (i = 0; i < DUMPLEN; i++){
+    
+        if (cols == 16){
+            cols = 0;
+            crlf();
+            puthex8(addr>>8);
+            puthex8(addr&0xff);
+            putchar(':');
+        }
+        if (addr < addr1)
+            putstr("  ");
+        else
+            puthex8(p[i]);
+        cols++;
+        putchar(' ');
+        addr++;
+    }
+
+    crlf();
+    
+    return addr;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void go(int last_go) __naked {
+
+    __asm
+
+    push bc
+    ld bc,#retgo
+    push bc
+    jp (hl)
+retgo:
+    pop bc
+    ret
+    
+    __endasm;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void proc_intelhex(char *buf){
+
+    crlf();
+
+    unsigned char checksum = 0;
+    buf++;
+    int nbytes = get_prm8(buf);
+    buf += 2;
+    checksum = nbytes;
+
+    int addr = get_prm16(buf);
+    buf += 4;
+    checksum += (addr >> 8);
+    checksum += (addr & 0xff);
+
+    int type = get_prm8(buf);
+    buf += 2;
+    if (type) return;
+    
+    int i;
+    char *bufbytes = buf;
+    for (i = 0; i < nbytes; i++){
+    
+        unsigned char c = get_prm8(buf);
+	checksum += c;
+	buf += 2;
+    }
+
+    unsigned char ck2 = get_prm8(buf);
+    
+    if ((checksum + ck2) & 0xff)
+        putstr("Checksum error!\r\n");
+    else{
+    
+        char *p = (char *)addr;
+        for (i = 0; i < nbytes; i++){    
+            
+            p[i] = get_prm8(bufbytes);
+            bufbytes += 2;
+        }
+        putstr("Verify OK.\r\n");
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void load_ihex(char *buf){
+
+    putstr("\r\nSend the IHEX file, [ENTER] to abort\r\n");
+    
+    for(;;){
+
+        lgets_noecho(buf, BUFSIZE);
+        if (!buf[0]) return;
+        proc_intelhex(buf);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void parse_buf(char *buf){
+
+    filter_buf(buf);
+    int res;
+    
+    if (!strncmp(buf,"load",4)){
+    
+	load_ihex(buf);
+    }
+    
+    switch(buf[0]){
+    
+        case 'e':
+            res = get_prm16(buf+1);
+            if (res != -1)
+            	last_edit = res;
+            	last_edit = edit_mem(last_edit);
+            break;
+        
+        case 'd':
+            res = get_prm16(buf+1);
+            if (res != -1)
+                last_dump = res;
+            last_dump = dump_mem(last_dump);
+            break;
+            
+        case 'g':
+            res = get_prm16(buf+1);
+            if (res != -1)
+                last_go = res;
+            putstr("Go!\r\n");
+            go(last_go);
+            break;
+            
+        case ':':
+            //proc_intelhex(buf);
+            break;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void main (void){
+
+    char buf[BUFSIZE];
+    //setleds(0x55);
+    //lcd_begin();
+
+    putstr ("\r\nKRAFTMON 1.0\r\n");
+    putstr ("Ready...\r\n");
+
+    last_edit = 0x2100;
+    last_dump = 0x2100;
+    last_go = 0x2100;
+
+    for (;;){
+
+        prompt();
+        lgets(buf,sizeof(buf));
+        parse_buf(buf);
+    }
+}
+

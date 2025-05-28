@@ -1,0 +1,461 @@
+0001   0000             ; =============================================================================
+0002   0000             ;
+0003   0000             ;   Z80 WR Kits Microcomputer
+0004   0000             ;   Monitor Program for Alpha Z80 
+0005   0000             ;
+0006   0000             ;   amon\amon.asm 
+0007   0000             ;   Input  PORTX address 01h
+0008   0000             ;   Output PORTA address 02h
+0009   0000             ;   Output PORTB address 04h
+0010   0000             ;
+0011   0000             ;   28C64 EEPROM  8kB  0000h - 1FFFh
+0012   0000             ;   62256 SRAM   32kB  2000h - 7FFFh
+0013   0000             ;   62256 SRAM   32kB  8000h - FFFFh
+0014   0000             ;
+0015   0000             ;
+0016   0000             ;   Compiler: Tasm
+0017   0000             ;
+0018   0000             ;   Author: Dr. Eng. Wagner Rambo
+0019   0000             ;   Date:   2025, January 
+0020   0000             ;
+0021   0000             ;
+0022   0000             ; =============================================================================
+0023   0000             
+0024   0000             
+0025   0000             ; =============================================================================
+0026   0000             ; --- Hardware Mapping ---
+0027   0000             PORTX           .equ 01h ;PORTX address 
+0028   0000             PORTA           .equ 02h ;PORTA address 
+0029   0000             PORTB           .equ 04h ;PORTB address 
+0030   0000             EN		.equ	01h				;LCD enable pin (PORTB bit 1)
+0031   0000             RS		.equ	01h				;LCD RS pin (uses or logic)
+0032   0000             
+0033   0000             ROMBASE         .equ 0
+0034   0000             ROMSZ           .equ 2000h
+0035   0000             RAMBASE         .equ 2000h
+0036   0000             RAMSZ           .equ 6000h
+0037   0000             
+0038   0000             ; =============================================================================
+0039   0000             ; --- General Purpose Registers ---
+0040   0000             AUX 	 .equ	(RAMBASE+RAMSZ - 1)	;auxiliar para armazenamento 
+0041   0000             WR_RD	 .equ	(RAMBASE+RAMSZ - 2)	;registrador de escrita '1' / leitura '0' 
+0042   0000             STACKTOP .equ	(RAMBASE+RAMSZ - 2)
+0043   0000             
+0044   0000             ; =============================================================================
+0045   0000             ; --- Reset Vector ---
+0046   0000             		.org	0000h			;origem no endereço 00h de memória
+0047   0000             	
+0048   0000             
+0049   0000             ; =============================================================================
+0050   0000             ; --- Main Program ---
+0051   0000             begin:
+0052   0000             
+0053   0000 31 FE 7F    		ld	sp,STACKTOP		;pilha de memória 
+0054   0003 CD 58 01    		call	lcd_begin		;inicializa LCD no modo 4 bits		
+0055   0006 16 02       		ld	d,2				;carrega 2d em d 
+0056   0008 CD 3B 02    		call	dx100ms			;aguarda 500ms 				
+0057   000B 06 0C       		ld	b,0Ch 			;desliga cursor e blink 
+0058   000D CD 99 01    		call	lcd_cmd 		;envia comando 
+0059   0010 CD F1 01    		call	msg_init 		;escreve título "Alpha Z80" 
+0060   0013 16 0A       		ld	d,10			;carrega 10d em d 
+0061   0015 CD 3B 02    		call	dx100ms			;aguarda 1 seg. 
+0062   0018             		
+0063   0018 3E 00       		ld	a,00h 			;carrega acc com 00h 
+0064   001A 32 FE 7F    		ld	(WR_RD),a 		;zera registrador de escrita/leitura para iniciar em modo leitura 
+0065   001D             		
+0066   001D 21 00 20    		ld	hl,RAMBASE		;endereço inicial da RAM é carregado no par hl
+0067   0020 CD EF 00    		call	exmem			;exibe endereço e respectivo conteúdo no LCD "examine memory"
+0068   0023             		
+0069   0023             loop:
+0070   0023 CD 28 00    		call	read_keyb 		;chama sub-rotina para leitura do teclado 
+0071   0026 18 FB       		jr	loop 			;ad infinitum 
+0072   0028             
+0073   0028             
+0074   0028             ; =============================================================================
+0075   0028             ; --- Sub-Rotinas ---
+0076   0028             
+0077   0028             
+0078   0028             ; =============================================================================
+0079   0028             ; --- read_keyb ---
+0080   0028             read_keyb:
+0081   0028 DB 01       		in 		a,(PORTX)		;lê o conteúdo de PORTX 
+0082   002A CB 7F       		bit		7,a				;bit 7 ativo?
+0083   002C CA 53 00    		jp		z,px7			;sim, desvia para label px7
+0084   002F CB 77       		bit		6,a				;não, bit 6 ativo?
+0085   0031 CA 67 00    		jp		z,px6			;sim, desvia para label px6
+0086   0034 CB 6F       		bit		5,a				;não, bit 5 ativo?
+0087   0036 CA 7D 00    		jp		z,px5			;sim, desvia para label px5
+0088   0039 CB 67       		bit		4,a				;não, bit 4 ativo?
+0089   003B CA 8D 00    		jp		z,px4			;sim, desvia para label px4	
+0090   003E CB 5F       		bit		3,a				;bit 3 ativo?
+0091   0040 CA 97 00    		jp		z,px3			;sim, desvia para label px3
+0092   0043 CB 57       		bit		2,a				;não, bit 2 ativo?
+0093   0045 CA AA 00    		jp		z,px2			;sim, desvia para label px2
+0094   0048 CB 4F       		bit		1,a				;não, bit 1 ativo?
+0095   004A CA BF 00    		jp		z,px1			;sim, desvia para label px1
+0096   004D CB 47       		bit		0,a				;não, bit 0 ativo?
+0097   004F CA CF 00    		jp		z,px0			;sim, desvia para label px0
+0098   0052 C9          		ret 					;retorna, se nenhum botão estiver pressionado
+0099   0053             
+0100   0053             
+0101   0053             px7:							;incrementa nibble mais significativo do endereço / seta dado com o valor 88h
+0102   0053 3A FE 7F    		ld		a,(WR_RD)		;carrega registrador de escrita/leitura em acc
+0103   0056 FE 00       		cp		00h				;compara com 00h
+0104   0058 C2 62 00    		jp		nz,SET_88H		;se for 01h (escrita), desvia para SET_88H 
+0105   005B 11 00 01    		ld		de,100h			;do contrário é modo leitura: carrega 100h no par de 
+0106   005E 19          		add		hl,de 			;incrementa o par hl (endereço atual) em 10h 
+0107   005F C3 E6 00    		jp		final_kb		;desvia para saída da sub-rotina
+0108   0062             		
+0109   0062             SET_88H:
+0110   0062 36 88       		ld		(hl),88h
+0111   0064 C3 E6 00    		jp		final_kb		;desvia para saída da sub-rotina
+0112   0067             		
+0113   0067             		
+0114   0067             px6:							;incrementa segundo nibble do endereço / incrementa nibble mais significativo do dado 
+0115   0067 3A FE 7F    		ld		a,(WR_RD)		;carrega registrador de escrita/leitura em acc
+0116   006A FE 00       		cp		00h				;compara com 00h
+0117   006C C2 76 00    		jp		nz,INC_DTH		;se for 01h (escrita), desvia para INC_DTH
+0118   006F 11 10 00    		ld		de,10h			;do contrário é modo leitura: carrega 10h no par de 
+0119   0072 19          		add		hl,de 			;incrementa o par hl (endereço atual) em 10h 
+0120   0073 C3 E6 00    		jp		final_kb		;desvia para saída da sub-rotina 
+0121   0076             		
+0122   0076             INC_DTH:						;incrementa dado HIGH 
+0123   0076 7E          		ld		a,(hl)			;carrega conteúdo do endereço atual em acc
+0124   0077 C6 10       		add		a,10h			;incrementa nibble mais significativo do dado 
+0125   0079 77          		ld		(hl),a			;escreve na memória 
+0126   007A C3 E6 00    		jp		final_kb		;desvia para saída da sub-rotina 
+0127   007D             		
+0128   007D             		
+0129   007D             px5:							;incrementa nibble menos significativo do endereço / incrementa nibble menos significativo do dado 
+0130   007D 3A FE 7F    		ld		a,(WR_RD)		;carrega registrador de escrita/leitura em acc
+0131   0080 FE 00       		cp		00h				;compara com 00h
+0132   0082 C2 88 00    		jp		nz,INC_DTL		;se for 01h (escrita), desvia para INC_DTL 
+0133   0085 23          		inc		hl				;do contrário é modo leitura: incrementa endereço 
+0134   0086 18 5E       		jr		final_kb		;desvia para saída da sub-rotina
+0135   0088             
+0136   0088             INC_DTL:						;incrementa dado LOW 
+0137   0088 7E          		ld		a,(hl)			;carrega conteúdo do endereço atual em acc
+0138   0089 3C          		inc		a				;incrementa nibble menos significativo do dado 
+0139   008A 77          		ld		(hl),a			;escreve na memória 
+0140   008B 18 59       		jr		final_kb		;desvia para saída da sub-rotina 
+0141   008D             	
+0142   008D             	
+0143   008D             px4:							;alterna entre o modo leitura/escrita 
+0144   008D 3A FE 7F    		ld		a,(WR_RD)		;carrega acc com valor de WR_RD
+0145   0090 EE 01       		xor		01h				;inverte bit menos significativo de acc
+0146   0092 32 FE 7F    		ld		(WR_RD),a		;inverte bit menos sig. de WR_RD
+0147   0095 18 4F       		jr		final_kb		;desvia para saída da sub-rotina
+0148   0097             		
+0149   0097             		
+0150   0097             px3:							;decrementa nibble mais significativo do endereço / seta dado com o valor 00h 	
+0151   0097 3A FE 7F    		ld		a,(WR_RD)		;carrega registrador de escrita/leitura em acc
+0152   009A FE 00       		cp		00h				;compara com 00h
+0153   009C C2 A6 00    		jp		nz,SET_00H		;se for 01h (escrita), desvia para SET_00H 	
+0154   009F 11 00 01    		ld		de,100h			;carrega 100h no par de 
+0155   00A2 ED 52       		sbc		hl,de 			;decrementa o par hl (endereço atual) em 100h 
+0156   00A4 18 40       		jr		final_kb		;desvia para saída da sub-rotina
+0157   00A6             
+0158   00A6             SET_00H:
+0159   00A6 36 00       		ld		(hl),00h
+0160   00A8 18 3C       		jr		final_kb		;desvia para saída da sub-rotina
+0161   00AA             	
+0162   00AA             	
+0163   00AA             px2:							;decrementa segundo nibble do endereço / decrementa nibble mais significativo do dado 
+0164   00AA 3A FE 7F    		ld		a,(WR_RD)		;carrega registrador de escrita/leitura em acc
+0165   00AD FE 00       		cp		00h				;compara com 00h
+0166   00AF C2 B9 00    		jp		nz,DEC_DTH		;se for 01h (escrita), desvia para WR_NH
+0167   00B2 11 10 00    		ld		de,10h			;do contrário é modo leitura: carrega 10h no par de 
+0168   00B5 ED 52       		sbc		hl,de 			;decrementa o par hl (endereço atual) em 10h 
+0169   00B7 18 2D       		jr		final_kb		;desvia para saída da sub-rotina 
+0170   00B9             
+0171   00B9             DEC_DTH:						;decrementa dado HIGH 		
+0172   00B9 7E          		ld		a,(hl)			;carrega conteúdo do endereço atual em acc
+0173   00BA DE 10       		sbc		a,10h			;decrementa nibble mais significativo do dado 
+0174   00BC 77          		ld		(hl),a			;escreve na memória 
+0175   00BD 18 27       		jr		final_kb		;desvia para saída da sub-rotina
+0176   00BF             		
+0177   00BF             		
+0178   00BF             px1:
+0179   00BF 3A FE 7F    		ld		a,(WR_RD)		;carrega registrador de escrita/leitura em acc
+0180   00C2 FE 00       		cp		00h				;compara com 00h
+0181   00C4 C2 CA 00    		jp		nz,DEC_DTL		;se for 01h (escrita), desvia para DEC_DTL 
+0182   00C7 2B          		dec 	hl				;do contrário é modo leitura: decrementa endereço 
+0183   00C8 18 1C       		jr		final_kb		;desvia para saída da sub-rotina  
+0184   00CA             
+0185   00CA             DEC_DTL:						;decrementa dado LOW 
+0186   00CA 7E          		ld		a,(hl)			;carrega conteúdo do endereço atual em acc
+0187   00CB 3D          		dec		a				;decrementa nibble menos significativo do dado 
+0188   00CC 77          		ld		(hl),a			;escreve na memória 
+0189   00CD 18 17       		jr		final_kb		;desvia para saída da sub-rotina 
+0190   00CF             		
+0191   00CF             		
+0192   00CF             px0:							;roda o software contido na RAM 
+0193   00CF 06 20       		ld		b,' '			;escreve "run"...
+0194   00D1 CD 9D 01    		call	lcd_write		; ...
+0195   00D4 06 72       		ld		b,'r'			; ...
+0196   00D6 CD 9D 01    		call	lcd_write		; ...
+0197   00D9 06 75       		ld		b,'u'			; ...
+0198   00DB CD 9D 01    		call	lcd_write		; ...
+0199   00DE 06 6E       		ld		b,'n'			; ...
+0200   00E0 CD 9D 01    		call	lcd_write		; no lcd
+0201   00E3 CD 00 20    		call	RAMBASE			;roda o programa a partir do endereço inicial da RAM
+0202   00E6             
+0203   00E6             
+0204   00E6             final_kb:
+0205   00E6 CD EF 00    		call	exmem 			;exibe memória atual
+0206   00E9 16 02       		ld		d,2				;carrega d com 2 
+0207   00EB CD 3B 02    		call	dx100ms			;anti-bouncing (200ms)			 		
+0208   00EE C9          		ret 					;retorna da sub-rotina 
+0209   00EF             
+0210   00EF             
+0211   00EF             ; =============================================================================
+0212   00EF             ; --- exmem: Examine Memory ---
+0213   00EF             ; --- Gera linha 1 do programa monitor no formato:
+0214   00EF             ;     0000h: 00h R                                   ---
+0215   00EF             exmem:
+0216   00EF CD E6 01    		call	lcd_clear		;limpa lcd
+0217   00F2 7C          		ld		a,h				;armazena byte HIGH de endereço em acc
+0218   00F3 CD 2B 01    		call	lcd_hex			;mostra em hexadecimal
+0219   00F6 7D          		ld		a,l				;armazena byte LOW de endereço em acc
+0220   00F7 CD 2B 01    		call	lcd_hex			;mostra em hexadecimal
+0221   00FA 06 68       		ld		b,'h'			;armazena byte 'h' no acc
+0222   00FC CD 9D 01    		call	lcd_write		;escreve no lcd
+0223   00FF 06 3A       		ld		b,':'			;armazena byte ':' no acc
+0224   0101 CD 9D 01    		call	lcd_write		;escreve no lcd
+0225   0104 06 20       		ld		b,' '			;armazena byte ' ' no acc
+0226   0106 CD 9D 01    		call	lcd_write		;escreve no lcd
+0227   0109 7E          		ld		a,(hl)			;armazena conteúdo do endereço atual em acc
+0228   010A CD 2B 01    		call	lcd_hex			;mostra em hexadecimal
+0229   010D 06 68       		ld		b,'h'			;armazena byte 'h' no acc
+0230   010F CD 9D 01    		call	lcd_write		;escreve no lcd
+0231   0112 06 20       		ld		b,' '			;armazena byte ' ' no acc
+0232   0114 CD 9D 01    		call	lcd_write		;escreve no lcd
+0233   0117             
+0234   0117 3A FE 7F    		ld		a,(WR_RD)		;carrega registrador de escrita/leitura em acc
+0235   011A FE 00       		cp		00h				;compara com 00h
+0236   011C C2 25 01    		jp		nz,WR_MODE		;se for 01h (escrita), desvia para WR_MODE
+0237   011F 06 52       		ld		b,'R'			;do contrário, informa que é modo leitura
+0238   0121 CD 9D 01    		call	lcd_write		;escreve no display
+0239   0124 C9          		ret						;retorna da sub-rotina
+0240   0125             
+0241   0125             WR_MODE:
+0242   0125 06 57       		ld		b,'W'			;informa que é modo escrita
+0243   0127 CD 9D 01    		call	lcd_write		;escreve no display
+0244   012A C9          		ret						;retorna da sub-rotina
+0245   012B             
+0246   012B             
+0247   012B             ;=======================================================
+0248   012B             ; --- Exibe conteúdo em hexadecimal no LCD ---
+0249   012B             lcd_hex:
+0250   012B 32 FF 7F    		ld		(AUX),a			;armazena cópia do acc na RAM
+0251   012E 1F          		rra						;rotação de acc 4x para...
+0252   012F 1F          		rra						; a direita para separar...
+0253   0130 1F          		rra						; o nibble mais...
+0254   0131 1F          		rra						; significativo
+0255   0132 E6 0F       		and		0Fh				;preserva o nibble mais sig. na posição menos sig.
+0256   0134 FE 0A       		cp		0Ah				;compara acc com 0Ah
+0257   0136 D2 3D 01    		jp		nc,gt9H			;se não houve carry, acc > 9 e desvia para gt9H
+0258   0139 C6 30       		add		a,30h			;do contrário, acc <= 9 e soma 30h para o '0' da ASCII
+0259   013B 18 02       		jr		nibbleL			;desvia para calcular nibble menos significativo
+0260   013D             gt9H:
+0261   013D C6 37       		add		a,37h			;soma 37h para o 'A' da ASCII (41h - 0Ah) 
+0262   013F             nibbleL:
+0263   013F 47          		ld		b,a				;carrega b com acc
+0264   0140 CD 9D 01    		call	lcd_write		;escreve nibble mais significativo no display
+0265   0143 3A FF 7F    		ld		a,(AUX)			;recupera acc da RAM
+0266   0146 E6 0F       		and		0Fh				;preserva nibble menos sig.
+0267   0148 FE 0A       		cp		0Ah				;compara acc com 0Ah
+0268   014A D2 51 01    		jp		nc,gt9L			;se não houve carry, acc > 9 e desvia para gt9L
+0269   014D C6 30       		add		a,30h			;do contrário, acc <= 9 e soma 30h para o '0' da ASCII
+0270   014F 18 02       		jr		data_end		;desvia para finalizar escrita do dado
+0271   0151             gt9L:
+0272   0151 C6 37       		add		a,37h			;soma 37h para o 'A' da ASCII (41h - 0Ah)
+0273   0153             data_end:
+0274   0153 47          		ld		b,a				;carrega b com acc
+0275   0154 CD 9D 01    		call	lcd_write		;escreve nibble menos significativo no display
+0276   0157 C9          		ret						;retorno da sub-rotina
+0277   0158             
+0278   0158             
+0279   0158             ; =============================================================================
+0280   0158             ; --- Inicializa LCD modo de 4 bits ---
+0281   0158             lcd_begin:
+0282   0158 16 32       		ld		d,50			;carrega 50d em d 
+0283   015A CD 29 02    		call	dx1ms			;tempo para estabilização (50ms)
+0284   015D 06 30       		ld		b,30h			;protocolo de inicialização
+0285   015F 0E 00       		ld		c,00h			;envio de comando
+0286   0161 CD AE 01    		call	send_nibble		;envia 30h para o LCD
+0287   0164 16 05       		ld		d,5				;carrega 5d em d 
+0288   0166 CD 29 02    		call	dx1ms			;aguarda 5ms (tempo superior ao datasheet)
+0289   0169 06 30       		ld		b,30h			;protocolo de inicialização
+0290   016B 0E 00       		ld		c,00h			;envio de comando
+0291   016D CD AE 01    		call	send_nibble		;envia 30h para o LCD		
+0292   0170 CD 31 02    		call	d1ms 			;aguarda 1ms (tempo superior ao datasheet)
+0293   0173 06 30       		ld		b,30h			;protocolo de inicialização
+0294   0175 0E 00       		ld		c,00h			;envio de comando
+0295   0177 CD AE 01    		call	send_nibble		;envia 30h para o LCD
+0296   017A 06 20       		ld		b,20h			;LCD no modo 4 bits
+0297   017C 0E 00       		ld		c,00h			;envio de comando
+0298   017E CD AE 01    		call	send_nibble		;envia 30h para o LCD
+0299   0181 06 28       		ld		b,28h			;5x8 pontos por caractere, duas linhas
+0300   0183 CD 99 01    		call	lcd_cmd			;envia comando 28h
+0301   0186 06 0F       		ld		b,0Fh			;liga display, cursor e blink
+0302   0188 CD 99 01    		call	lcd_cmd			;envia comando 0Fh
+0303   018B 06 01       		ld		b,01h			;limpa LCD
+0304   018D CD 99 01    		call	lcd_cmd			;envia comando 01h
+0305   0190 06 06       		ld		b,06h			;modo de incremento de endereço para direita, movendo apenas o cursor 
+0306   0192 CD 99 01    		call	lcd_cmd			;envia comando 06h
+0307   0195 CD E6 01    		call	lcd_clear		;limpa o display
+0308   0198 C9          		ret						;retorno da sub-rotina
+0309   0199             		
+0310   0199             
+0311   0199             ; =============================================================================
+0312   0199             ; --- Envia Comandos / Escreve no LCD ---
+0313   0199             lcd_cmd:
+0314   0199 0E 00       		ld		c,00h
+0315   019B 18 02       		jr		send_byte
+0316   019D             lcd_write:
+0317   019D 0E 01       		ld		c,01h			;01h para envio de caracteres
+0318   019F             send_byte:		
+0319   019F CD AE 01    		call	send_nibble		;envia nibble mais significativo
+0320   01A2 78          		ld		a,b				;carrega conteúdo de b em acc
+0321   01A3 17          		rla						;rotaciona acc para esquerda 4x
+0322   01A4 17          		rla						;
+0323   01A5 17          		rla						;
+0324   01A6 17          		rla						;
+0325   01A7 E6 F0       		and		0F0h			;máscara para preservar nibble mais significativo
+0326   01A9 47          		ld		b,a				;atualiza b
+0327   01AA CD AE 01    		call	send_nibble		;envia nibble menos significativo
+0328   01AD C9          		ret						;retorno da sub-rotina
+0329   01AE             		
+0330   01AE             
+0331   01AE             ;==============================================================================
+0332   01AE             ; --- Envia cada nibble separadamente e gera pulso de enable ---
+0333   01AE             send_nibble:
+0334   01AE 3E 00       		ld		a,00h			;zera conteúdo de ACC
+0335   01B0 CB 41       		bit		0,c				;bit 0 de c em LOW?
+0336   01B2 CA B7 01    		jp		z,rs_clr		;sim, desvia para manter RS limpo
+0337   01B5 3E 01       		ld		a,00h|RS		;não, seta bit RS
+0338   01B7             rs_clr:
+0339   01B7 CB 78       		bit		7,b				;bit7 de B em LOW?
+0340   01B9 CA BE 01    		jp		z,b6aval		;sim, desvia para avaliar bit6
+0341   01BC CB FF       		set		7,a				;não, seta bit 7 de acc
+0342   01BE             b6aval:
+0343   01BE CB 70       		bit		6,b				;bit6 de B em LOW?
+0344   01C0 CA C5 01    		jp		z,b5aval		;sim, desvia para avaliar bit5
+0345   01C3 CB F7       		set		6,a				;não, seta bit 6 de acc
+0346   01C5             b5aval:
+0347   01C5 CB 68       		bit		5,b				;bit5 de B em LOW?
+0348   01C7 CA CC 01    		jp		z,b4aval		;sim, desvia para avaliar bit4
+0349   01CA CB EF       		set		5,a				;não, seta bit 5 de acc
+0350   01CC             b4aval:
+0351   01CC CB 60       		bit		4,b				;bit4 de B em LOW?
+0352   01CE CA D3 01    		jp		z,lcd_en		;sim, desvia para pulso de enable
+0353   01D1 CB E7       		set		4,a				;não, set bit 4 de acc
+0354   01D3             lcd_en:
+0355   01D3 CB CF       		set		EN,a			;pino enable em HIGH
+0356   01D5 D3 04       		out		(PORTB),a		;escreve no PORTB 
+0357   01D7 16 02       		ld		d,2				;carrega 2d em d 
+0358   01D9 CD 29 02    		call    dx1ms           ;aguarda 2ms 
+0359   01DC CB 8F       		res		EN,a			;pino enable em LOW 
+0360   01DE D3 04       		out		(PORTB),a 		;escreve no PORTB 
+0361   01E0 16 02       		ld		d,2				;carrega 2d em d
+0362   01E2 CD 29 02    		call    dx1ms           ;aguarda 2ms 		
+0363   01E5 C9          		ret						;retorno da sub-rotina
+0364   01E6             		
+0365   01E6             
+0366   01E6             ; =============================================================================
+0367   01E6             ; --- Limpa LCD ---
+0368   01E6             lcd_clear:
+0369   01E6 06 02       		ld		b,02h			;return home
+0370   01E8 CD 99 01    		call	lcd_cmd			;envia 02h para o LCD
+0371   01EB 06 01       		ld		b,01h			;limpa o display
+0372   01ED CD 99 01    		call	lcd_cmd			;envia 01h para o LCD
+0373   01F0 C9          		ret						;retorno da sub-rotina		
+0374   01F1             		
+0375   01F1             
+0376   01F1             ; =============================================================================
+0377   01F1             ; --- Imprime o título na segunda linha do LCD ---
+0378   01F1             msg_init:
+0379   01F1 06 C0       		ld		b,0C0h			;posiciona cursor na linha 1, coluna 0
+0380   01F3 CD 99 01    		call	lcd_cmd			;envia comando 
+0381   01F6 06 41       		ld		b,'A' 			;imprime "Alpha Z80" 
+0382   01F8 CD 9D 01    		call	lcd_write 
+0383   01FB 06 6C       		ld		b,'l'
+0384   01FD CD 9D 01    		call 	lcd_write 
+0385   0200 06 70       		ld		b,'p'
+0386   0202 CD 9D 01    		call 	lcd_write 
+0387   0205 06 68       		ld		b,'h'
+0388   0207 CD 9D 01    		call 	lcd_write 
+0389   020A 06 61       		ld		b,'a'
+0390   020C CD 9D 01    		call 	lcd_write
+0391   020F 06 20       		ld		b,' '
+0392   0211 CD 9D 01    		call 	lcd_write 	
+0393   0214 06 5A       		ld		b,'Z'
+0394   0216 CD 9D 01    		call 	lcd_write 
+0395   0219 06 38       		ld		b,'8'
+0396   021B CD 9D 01    		call 	lcd_write 		
+0397   021E 06 30       		ld		b,'0'
+0398   0220 CD 9D 01    		call 	lcd_write 		
+0399   0223 06 80       		ld		b,80h			;posiciona cursor na linha 0, coluna 0
+0400   0225 CD 99 01    		call	lcd_cmd			;envia comando 
+0401   0228 C9          		ret						;retorna da sub-rotina 
+0402   0229             
+0403   0229             
+0404   0229             ; =============================================================================
+0405   0229             ; --- dx1ms multiplies 1ms delay ---	
+0406   0229             dx1ms:				
+0407   0229 CD 31 02    		call	d1ms			; 1ms (delay time)
+0408   022C 15          		dec 	d 				; 1.0µs    4 T States 
+0409   022D C2 29 02    		jp 		nz,dx1ms  		; 2.5µs   10 T States 		
+0410   0230 C9          		ret						; 2.5µs   10 T States 
+0411   0231             
+0412   0231             
+0413   0231             ; =============================================================================
+0414   0231             ; --- aprox. 1ms delay (clock 4MHz) ---
+0415   0231             d1ms:							; 4.25µs  17 T States (call)
+0416   0231 C5          		push	bc				; 2.75µs  11 T States 
+0417   0232 06 DB       		ld		b,0DBh			; 1.75 µs  7 T States 
+0418   0234             dloop:
+0419   0234 05          		dec		b				; 1.0µs    4 T States 
+0420   0235 00          		nop 					; 1.0µs    4 T States 
+0421   0236 C2 34 02    		jp		nz,dloop		; 2.5µs   10 T States 								
+0422   0239 C1          		pop		bc				; 2.5µs   10 T States 
+0423   023A C9          		ret						; 2.5µs   10 T States 
+0424   023B             
+0425   023B             
+0426   023B             ; =============================================================================
+0427   023B             ; --- dx100ms multiplies 100ms delay ---	
+0428   023B             dx100ms: 
+0429   023B CD 43 02    		call	d100ms			; 1ms (delay time)
+0430   023E 15          		dec 	d 				; 1.0µs    4 T States 
+0431   023F C2 3B 02    		jp 		nz,dx100ms 		; 2.5µs   10 T States 	
+0432   0242 C9          		ret						; 2.5µs   10 T States 
+0433   0243             		
+0434   0243             		
+0435   0243             ; =============================================================================
+0436   0243             ; --- aprox. 100ms delay (clock 4MHz) ---
+0437   0243             d100ms:							; 4.25µs  17 T States
+0438   0243 C5          		push	bc 				; 2.75µs  11 T States 
+0439   0244 06 97       		ld		b,97h			; 1.75µs   7 T States 
+0440   0246             aux1:
+0441   0246 0E BD       		ld		c,0BDh			; 1.75µs   7 T States 
+0442   0248             aux2:
+0443   0248 0D          		dec		c				; 1.0µs    4 T States 
+0444   0249 C2 48 02    		jp		nz,aux2 		; 2.5µs   10 T States 
+0445   024C 05          		dec		b 				; 1.0µs    4 T States 
+0446   024D C2 46 02    		jp		nz,aux1 		; 2.5µs   10 T States 
+0447   0250 C1          		pop		bc 				; 2.5µs   10 T States 
+0448   0251 C9          		ret 					; 2.5µs   10 T States 
+0449   0252             
+0450   0252             
+0451   0252             
+0452   0252             
+0453   0252             ;=======================================================
+0454   0252             ; --- Final do Programa ---
+0455   0252             		.end
+0456   0252             
+0457   0252             
+0458   0252             
+0459   0252             		
+0460   0252             		
+tasm: Number of errors = 0

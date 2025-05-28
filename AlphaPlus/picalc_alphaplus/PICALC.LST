@@ -1,0 +1,2243 @@
+0001   0000             ;//////////////////////////////////////////////////////////////////////////////;
+0002   0000             ; Project:                                                                     ;
+0003   0000             ;    PICALC-Z80-ALPHA-PLUS                                                     ;
+0004   0000             ;                                                                              ;
+0005   0000             ; Description:                                                                 ;
+0006   0000             ;    A calculator that yields an arbitrary number of digits of the number PI.  ;
+0007   0000             ;                                                                              ;
+0008   0000             ; Target:                                                                      ;
+0009   0000             ;    The modified WR Kits' Z80 Alpha computer (AKA Z80 Alpha Plus by ARM Coder);
+0010   0000             ;    Details of memory allocation and stack positioning must be adjusted for   ;
+0011   0000             ;    the specifics of other targets, if any. In addition, INT 08h is used as a ;
+0012   0000             ;    function call to print character over TTY (A = character), which          ;
+0013   0000             ;    implementation has to be adjusted to the target.                          ;
+0014   0000             ;                                                                              ;
+0015   0000             ; Compiler:                                                                    ;
+0016   0000             ;    Tasm + DosBox                                                             ;
+0017   0000             ;                                                                              ;
+0018   0000             ;    Other compilers/assemblers may require minor changes in the source code.  ;
+0019   0000             ;                                                                              ;
+0020   0000             ; Usage:                                                                       ;
+0021   0000             ;    The desired amount of PI digits is defined in the macro NUM_DECS. Default ;
+0022   0000             ;    value is 100. Note that incrementing this value will increase RAM usage   ;
+0023   0000             ;    proportionally, and the needed CPU cycles quadratically. Don't change the ;
+0024   0000             ;    other algorithm constants unless you really know what you are doing.      ;
+0025   0000             ;                                                                              ;
+0026   0000             ;    The algorithm was validated for 1,000 digits of PI, all of them checked   ;
+0027   0000             ;    against the generally known published digits. For an actual Z80, yielding ;
+0028   0000             ;    this number of digits may prove to be a daunting task, especially because ;
+0029   0000             ;    of the gigantic number of CPU cycles needed (RAM is a lesser problem in   ;
+0030   0000             ;    this regard). 100 digits is way more practical amount, unless you have A  ;
+0031   0000             ;    LOT of time to spare.                                                     ;
+0032   0000             ;                                                                              ;
+0033   0000             ;    The main loop iteracts as many times as needed to calculate all the       ;
+0034   0000             ;    decimal places requested (the number of iterations / number of digits have;
+0035   0000             ;    a ratio close to 0.9). With each iteration the message 'TOTAL:' is printed;
+0036   0000             ;    along the PI approximation calculated so far.                             ;
+0037   0000             ;                                                                              ;
+0038   0000             ; Version & Date:                                                              ;
+0039   0000             ;    1.0 - 2025-MAY-01                                                         ;
+0040   0000             ;                                                                              ;
+0041   0000             ; Author:                                                                      ;
+0042   0000             ;    Milton Maldonado Jr (ARM_Coder)                                           ;
+0043   0000             ;                                                                              ;
+0044   0000             ; License:                                                                     ;
+0045   0000             ;    GPL V2                                                                    ;
+0046   0000             ;                                                                              ;
+0047   0000             ; Disclaimer:                                                                  ;
+0048   0000             ;    This code is supplied 'as is' with no warranty against bugs. It was tested;
+0049   0000             ;    on a Z80 simulator that *I* wrote (haha), so it was not tested against any;
+0050   0000             ;    actual, validated target.                                                 ;
+0051   0000             ;                                                                              ;
+0052   0000             ; Note:                                                                        ;
+0053   0000             ;    Along the ASM source, you will see some commented 'C' statemens. The      ;
+0054   0000             ;    project was initially built and tested in C, and then hand-translated     ;
+0055   0000             ;    to Z80 ASM.                                                               ;
+0056   0000             ;                                                                              ;
+0057   0000             ; Funny note:                                                                  ;
+0058   0000             ;    This project implements the Bailey-Borwein-Plouffe method of calculating  ;
+0059   0000             ;    PI. This method is much, much faster that the classic Leibniz series.     ;
+0060   0000             ;    The funny thing is that the method was discovered (invented?) in 1995,    ;
+0061   0000             ;    when the Z80 had already passed its heyday and was fading into a niche,   ;
+0062   0000             ;    retro platform.                                                           ;
+0063   0000             ;//////////////////////////////////////////////////////////////////////////////;
+0064   0000             
+0065   0000             ; Hardware constants
+0066   0000             PORTX           .equ 01h ;PORTX address 
+0067   0000             PORTA           .equ 02h ;PORTA address 
+0068   0000             PORTB           .equ 04h ;PORTB address 
+0069   0000             
+0070   0000             EN              .equ 01h ;LCD enable pin (PORTB bit 1)
+0071   0000             RS              .equ 01h ;LCD RS pin (uses or logic)
+0072   0000             
+0073   0000             ROMBASE         .equ 0
+0074   0000             ROMSZ           .equ 2000h
+0075   0000             RAMBASE         .equ 2000h
+0076   0000             RAMSZ           .equ 6000h
+0077   0000             
+0078   0000             ; Algorithm constants
+0079   0000             NUM_DECS        .equ 11
+0080   0000             NUM_IT          .equ ((NUM_DECS*9)/10)
+0081   0000             NBITS_FR        .equ (3*NUM_DECS + (NUM_DECS >> 1))
+0082   0000             NBITS_INT       .equ 16
+0083   0000             NBITS_FRAC      .equ 8*(1 + (NBITS_FR >> 3)) ; The number of bits should be at least 3.33x (1 / log(2)) the number of decimal places, plus a small cushion.
+0084   0000             NBYTES_INT      .equ NBITS_INT >> 3
+0085   0000             NBITS           .equ NBITS_INT+NBITS_FRAC
+0086   0000             NBYTES          .equ NBITS>>3
+0087   0000             NBYTES1         .equ NBYTES-1
+0088   0000             
+0089   0000                 .org ROMBASE    ; Expected to be 0x00. Other values will clash with the
+0090   0000                                 ; interrupt handlers below.
+0091   0000             
+0092   0000 C3 68 00        jp start
+0093   0003             
+0094   0008                 .org 0008h
+0095   0008 C5              push bc
+0096   0009 47              ld b,a
+0097   000A CD FB 08        call lcd_write
+0098   000D C1              pop bc
+0099   000E C9              ret
+0100   000F             
+0101   0038                 .org 0038h       ; HW Interrupt IM 1.
+0102   0038 ED 4D           reti
+0103   003A             
+0104   0066                 .org 0066h       ; NMI
+0105   0066 ED 45           retn
+0106   0068             
+0107   0068             start:
+0108   0068                 ;ld hl,RAMBASE+RAMSZ-1
+0109   0068                 ;xor a
+0110   0068                 ;ld (hl),a
+0111   0068             loopled:
+0112   0068                 ;in a,(PORTX)
+0113   0068                 ;cpl
+0114   0068                 ;or a
+0115   0068                 ;jr z,loopled
+0116   0068                 ;ld a,(hl)
+0117   0068                 ;out (PORTA),a
+0118   0068                 ;inc a
+0119   0068                 ;ld (hl),a
+0120   0068                 ;jr loopled
+0121   0068             	
+0122   0068 31 00 80        ld sp,RAMBASE + RAMSZ
+0123   006B CD 85 08        call _main
+0124   006E 76              halt
+0125   006F             
+0126   006F             ;///////////////////////////////////////////////////////////////////////////////
+0127   006F             ;   prints
+0128   006F             ;   void prints(const char *string);
+0129   006F             ;   Parameters: The string must be supplied inline after the call to prints,
+0130   006F             ;               and must be null-terminated. The function will return to the
+0131   006F             ;               first instruction after the aforementioned null terminator.
+0132   006F             ;               Because of that, the call must be always unconditional (opcode
+0133   006F             ;               0xCD).
+0134   006F             ;   Returns: Nothing
+0135   006F             ;   Affects: HL, AF & whatever INT 08H also affects
+0136   006F             prints:
+0137   006F             
+0138   006F E1              pop hl
+0139   0070             prints_1:
+0140   0070 7E              ld a,(hl)
+0141   0071 B7              or a
+0142   0072 28 04           jr z,prints_2
+0143   0074 CF              rst 08h
+0144   0075 23              inc hl
+0145   0076 18 F8           jr prints_1
+0146   0078             prints_2:
+0147   0078 23              inc hl
+0148   0079 E5              push hl
+0149   007A C9              ret
+0150   007B             
+0151   007B             ;///////////////////////////////////////////////////////////////////////////////
+0152   007B             ;   print_crlf
+0153   007B             ;   void print_crlf(void);
+0154   007B             ;   Parameters: Nothing
+0155   007B             ;   Returns: Nothing
+0156   007B             ;   Affects: HL
+0157   007B             print_crlf:
+0158   007B             
+0159   007B CD 6F 00        call prints
+0160   007E 0D 0A 00        .db 13,10,0
+0161   0081 C9              ret
+0162   0082             
+0163   0082             ;///////////////////////////////////////////////////////////////////////////////
+0164   0082             ;   zero_reg
+0165   0082             ;   void zero_reg(uint8_t *reg);
+0166   0082             ;   Parameters:
+0167   0082             ;     HL: reg
+0168   0082             ;   Returns: Nothing
+0169   0082             ;   Affects: BC DE HL AF
+0170   0082             zero_reg:
+0171   0082             
+0172   0082                 ;    memset(reg,0,NBYTES);
+0173   0082 01 06 00        ld bc,NBYTES-1
+0174   0085 AF              xor a
+0175   0086 77              ld (hl),a
+0176   0087 54              ld d,h
+0177   0088 5D              ld e,l
+0178   0089 13              inc de
+0179   008A ED B0           ldir
+0180   008C C9              ret
+0181   008D             
+0182   008D             ;///////////////////////////////////////////////////////////////////////////////
+0183   008D             ;   set_bit_reg
+0184   008D             ;   void set_bit_reg(uint8_t *reg, int place);
+0185   008D             ;   Parameters:
+0186   008D             ;     HL: reg
+0187   008D             ;     BC: place
+0188   008D             ;   Returns: Nothing
+0189   008D             ;   Affects: BC DE HL AF
+0190   008D             set_bit_reg:
+0191   008D             
+0192   008D                 ;   int byte = NBYTES1 - (place >> 3);
+0193   008D E5              push hl
+0194   008E 21 06 00        ld hl,NBYTES1
+0195   0091             
+0196   0091             set_bit_reg0:
+0197   0091             
+0198   0091 50              ld d,b
+0199   0092 59              ld e,c
+0200   0093 CB 3A           srl d
+0201   0095 CB 1B           rr e
+0202   0097 CB 3A           srl d
+0203   0099 CB 1B           rr e
+0204   009B CB 3A           srl d
+0205   009D CB 1B           rr e
+0206   009F 37              scf
+0207   00A0 3F              ccf
+0208   00A1 ED 52           sbc hl,de
+0209   00A3 EB              ex de,hl    ;DE: byte
+0210   00A4 E1              pop hl
+0211   00A5             
+0212   00A5                 ;   int bits = place & 0x07;
+0213   00A5 79              ld a,c
+0214   00A6 E6 07           and 07h    ;A: bits
+0215   00A8             
+0216   00A8                 ;   reg[byte] |= 1<<bits;
+0217   00A8 19              add hl,de
+0218   00A9             
+0219   00A9 06 01           ld b,1
+0220   00AB B7              or a
+0221   00AC 28 05           jr z,set_bit_reg2
+0222   00AE             
+0223   00AE             set_bit_reg1:
+0224   00AE             
+0225   00AE CB 20           sla b
+0226   00B0 3D              dec a
+0227   00B1 20 FB           jr nz,set_bit_reg1
+0228   00B3             
+0229   00B3             set_bit_reg2:
+0230   00B3             
+0231   00B3 7E              ld a,(hl)
+0232   00B4 B0              or b
+0233   00B5 77              ld (hl),a
+0234   00B6 C9              ret
+0235   00B7             
+0236   00B7             ;///////////////////////////////////////////////////////////////////////////////
+0237   00B7             ;   set_bit_reg_int
+0238   00B7             ;   void set_bit_reg_int(uint8_t *reg, int place);
+0239   00B7             ;   Parameters:
+0240   00B7             ;     HL: reg
+0241   00B7             ;     BC: place
+0242   00B7             ;   Returns: Nothing
+0243   00B7             ;   Affects: BC DE HL AF
+0244   00B7             set_bit_reg_int:
+0245   00B7             
+0246   00B7                 ;   int byte = NBYTES_INT - 1 - (place >> 3);
+0247   00B7 E5              push hl
+0248   00B8 21 01 00        ld hl,NBYTES_INT-1
+0249   00BB 18 D4           jr set_bit_reg0
+0250   00BD             
+0251   00BD             ;///////////////////////////////////////////////////////////////////////////////
+0252   00BD             ;   print_reg
+0253   00BD             ;   void print_reg(uint8_t *reg);
+0254   00BD             ;   Não portada
+0255   00BD             
+0256   00BD             ;///////////////////////////////////////////////////////////////////////////////
+0257   00BD             ;   add_reg2_to_reg1
+0258   00BD             ;   void add_reg2_to_reg1(uint8_t *reg1, const uint8_t *reg2);
+0259   00BD             ;   Parameters:
+0260   00BD             ;     HL: reg2
+0261   00BD             ;     DE: reg1
+0262   00BD             ;   Returns: Nothing
+0263   00BD             ;   Affects: BC DE HL AF BC' DE' HL' AF'
+0264   00BD             add_reg2_to_reg1:
+0265   00BD             
+0266   00BD                 ;   uint16_t cy = 0;
+0267   00BD                 ;   int i;
+0268   00BD                 ;   for (i = NBYTES1; i >= 0; i--){
+0269   00BD                 ;       uint16_t sum = (uint16_t)reg1[i] + (uint16_t)reg2[i] + cy;
+0270   00BD                 ;       if (sum & 0x100)
+0271   00BD                 ;           cy = 1;
+0272   00BD                 ;       else
+0273   00BD                 ;           cy = 0;
+0274   00BD                 ;       reg1[i] = sum & 0xff;
+0275   00BD                 ;   }
+0276   00BD             
+0277   00BD 01 06 00        ld bc,NBYTES1
+0278   00C0 09              add hl,bc
+0279   00C1 EB              ex de,hl
+0280   00C2 09              add hl,bc
+0281   00C3 EB              ex de,hl
+0282   00C4 D9              exx
+0283   00C5 01 06 00        ld bc,NBYTES1
+0284   00C8 03              inc bc
+0285   00C9 D9              exx
+0286   00CA 97              sub a   ;zero Carry Flag
+0287   00CB             
+0288   00CB             add_reg2_to_reg1_0:
+0289   00CB             
+0290   00CB 46              ld b,(hl)
+0291   00CC 1A              ld a,(de)
+0292   00CD 88              adc a,b
+0293   00CE 12              ld (de),a
+0294   00CF             
+0295   00CF 2B              dec hl
+0296   00D0 1B              dec de
+0297   00D1             
+0298   00D1 D9              exx                         ; Save HL & DE, restores counter in BC
+0299   00D2 08              ex af,af'                   ; Save CY
+0300   00D3 0B              dec bc
+0301   00D4 78              ld a,b
+0302   00D5 B1              or c
+0303   00D6 C8              ret z                       ; End loop, bye
+0304   00D7 08              ex af,af'                   ; Restore CY
+0305   00D8 D9              exx                         ; Save counter in BC, restores HL & DE
+0306   00D9 18 F0           jr add_reg2_to_reg1_0
+0307   00DB             
+0308   00DB             ;///////////////////////////////////////////////////////////////////////////////
+0309   00DB             ;   add_reg_to_acc
+0310   00DB             ;   void add_reg_to_acc(const uint8_t *reg);
+0311   00DB             ;   Parameters:
+0312   00DB             ;     HL: reg
+0313   00DB             ;   Returns: Nothing
+0314   00DB             ;   Affects: BC DE HL AF BC' DE' HL' AF'
+0315   00DB             add_reg_to_acc:
+0316   00DB             
+0317   00DB 11 00 20        ld de,acc
+0318   00DE 18 DD           jr add_reg2_to_reg1
+0319   00E0             
+0320   00E0             ;///////////////////////////////////////////////////////////////////////////////
+0321   00E0             ;   inc_reg_int8
+0322   00E0             ;   void inc_reg_int8(uint8_t *reg, uint8_t byteval);
+0323   00E0             ;   Parameters:
+0324   00E0             ;     DE: reg
+0325   00E0             ;     A:  byteval
+0326   00E0             ;   Returns: Nothing
+0327   00E0             ;   Affects: BC DE HL AF BC' DE' HL' AF'
+0328   00E0             inc_reg_int8:
+0329   00E0             
+0330   00E0                 ;    uint16_t cy = byteval;
+0331   00E0                 ;    int i;
+0332   00E0                 ;    for (i = NBYTES_INT - 1; i >= 0; i--){
+0333   00E0                 ;        uint16_t sum =(uint16_t)reg[i] + cy;
+0334   00E0                 ;        reg[i] = sum & 0xff;
+0335   00E0                 ;        if (!(sum & 0x100))
+0336   00E0                 ;            return;
+0337   00E0                 ;        cy = 1;
+0338   00E0                 ;    }
+0339   00E0             
+0340   00E0 01 02 00        ld bc,NBYTES_INT
+0341   00E3 EB              ex de,hl
+0342   00E4 09              add hl,bc
+0343   00E5 2B              dec hl
+0344   00E6 5F              ld e,a
+0345   00E7             
+0346   00E7             inc_reg_int8_0:
+0347   00E7             
+0348   00E7 7E              ld a,(hl)
+0349   00E8 83              add a,e
+0350   00E9 77              ld (hl),a
+0351   00EA             
+0352   00EA 1E 00           ld e,0
+0353   00EC 30 01           jr nc, inc_reg_int8_1
+0354   00EE 1C              inc e       ; Here E propagates the carry for the sums.
+0355   00EF             
+0356   00EF             inc_reg_int8_1:
+0357   00EF             
+0358   00EF 0B              dec bc
+0359   00F0 78              ld a,b
+0360   00F1 B1              or c
+0361   00F2 C8              ret z                       ; End loop, bye
+0362   00F3             
+0363   00F3 2B              dec hl
+0364   00F4 18 F1           jr inc_reg_int8_0
+0365   00F6             
+0366   00F6             ;///////////////////////////////////////////////////////////////////////////////
+0367   00F6             ;   load_reg_int
+0368   00F6             ;   void load_reg_int(uint8_t *reg, int val);
+0369   00F6             ;   Parameters:
+0370   00F6             ;     DE: reg
+0371   00F6             ;     HL: val
+0372   00F6             ;   Returns: Nothing
+0373   00F6             ;   Affects: BC DE HL AF BC' DE' HL' AF'
+0374   00F6             load_reg_int:
+0375   00F6             
+0376   00F6             ;    for (int i = NBYTES_INT - 1; i >= 0; i--){
+0377   00F6             ;        reg[i] = val & 0xff;
+0378   00F6             ;        val >>= 8;
+0379   00F6             ;    }
+0380   00F6 EB              ex de,hl
+0381   00F7 01 02 00        ld bc,NBYTES_INT
+0382   00FA 09              add hl,bc
+0383   00FB 2B              dec hl
+0384   00FC 06 02           ld b,NBYTES_INT
+0385   00FE 7B              ld a,e
+0386   00FF 77              ld (hl),a
+0387   0100 2B              dec hl
+0388   0101 7A              ld a,d
+0389   0102 77              ld (hl),a
+0390   0103 05              dec b
+0391   0104 05              dec b
+0392   0105 78              ld a,b
+0393   0106 B7              or a
+0394   0107 C8              ret z
+0395   0108 2B              dec hl
+0396   0109 AF              xor a
+0397   010A             load_reg_int_0:
+0398   010A 77              ld (hl),a
+0399   010B 2B              dec hl
+0400   010C 10 FC           djnz load_reg_int_0
+0401   010E C9              ret
+0402   010F             
+0403   010F             ;///////////////////////////////////////////////////////////////////////////////
+0404   010F             ;   sub_reg2_from_reg1
+0405   010F             ;   void sub_reg2_from_reg1(uint8_t *reg1, const uint8_t *reg2);
+0406   010F             ;   Parameters:
+0407   010F             ;     DE: reg1
+0408   010F             ;     HL: reg2
+0409   010F             ;   Returns: Nothing
+0410   010F             ;   Affects: BC DE HL AF BC' DE' HL' AF'
+0411   010F             sub_reg2_from_reg1:
+0412   010F             
+0413   010F             ;    uint16_t cy = 0;
+0414   010F             ;    int i;
+0415   010F             ;    for (i = NBYTES1; i >= 0; i--){
+0416   010F             ;        uint16_t diff = (uint16_t)reg1[i] - (uint16_t)reg2[i] - cy;
+0417   010F             ;        if (diff & 0x8000)
+0418   010F             ;            cy = 1;
+0419   010F             ;        else
+0420   010F             ;            cy = 0;
+0421   010F             ;        reg1[i] = diff & 0xff;
+0422   010F             ;    }
+0423   010F             
+0424   010F 01 06 00        ld bc,NBYTES1
+0425   0112 09              add hl,bc
+0426   0113 EB              ex de,hl
+0427   0114 09              add hl,bc
+0428   0115 EB              ex de,hl
+0429   0116 D9              exx
+0430   0117 01 06 00        ld bc,NBYTES1
+0431   011A 03              inc bc
+0432   011B D9              exx
+0433   011C 97              sub a   ;zera CY
+0434   011D             
+0435   011D             sub_reg2_to_reg1_0:
+0436   011D             
+0437   011D 46              ld b,(hl)
+0438   011E 1A              ld a,(de)
+0439   011F 98              sbc a,b
+0440   0120 12              ld (de),a
+0441   0121             
+0442   0121 2B              dec hl
+0443   0122 1B              dec de
+0444   0123             
+0445   0123 D9              exx                         ; Save HL & DE, restores counter in BC
+0446   0124 08              ex af,af'                   ; Save CY
+0447   0125 0B              dec bc
+0448   0126 78              ld a,b
+0449   0127 B1              or c
+0450   0128 C8              ret z                       ; End loop, bye
+0451   0129 08              ex af,af'                   ; Restore CY
+0452   012A D9              exx                         ; Save counter in BC, restore HL & DE
+0453   012B 18 F0           jr sub_reg2_to_reg1_0
+0454   012D             
+0455   012D             ;///////////////////////////////////////////////////////////////////////////////
+0456   012D             ;   sub_reg_from_acc
+0457   012D             ;   void sub_reg_from_acc(const uint8_t *reg);
+0458   012D             ;   Parameters:
+0459   012D             ;     HL: reg
+0460   012D             ;   Returns: Nothing
+0461   012D             ;   Affects: BC DE HL AF BC' DE' HL' AF'
+0462   012D             sub_reg_from_acc:
+0463   012D             
+0464   012D 11 00 20        ld de,acc
+0465   0130 CD 0F 01        call sub_reg2_from_reg1
+0466   0133 C9              ret
+0467   0134             
+0468   0134             ;///////////////////////////////////////////////////////////////////////////////
+0469   0134             ;   shl_reg
+0470   0134             ;   void shl_reg(uint8_t *reg, int places)
+0471   0134             ;   Parameters:
+0472   0134             ;     DE: reg
+0473   0134             ;     BC: places
+0474   0134             ;   Returns: Nothing
+0475   0134             ;   Affects: BC DE HL AF
+0476   0134             shl_reg:
+0477   0134             
+0478   0134 DD E5           push ix
+0479   0136 DD 21 F8 FF     ld ix,0FFF8h    ; Allocates 8 bytes
+0480   013A DD 39           add ix,sp
+0481   013C DD F9           ld sp,ix
+0482   013E             
+0483   013E DD 73 00        ld (ix+0),e     ;IX+0, IX+1 = 'reg'
+0484   0141 DD 72 01        ld (ix+1),d
+0485   0144             
+0486   0144             ;    if (places > NBITS)
+0487   0144             ;        places = NBITS;
+0488   0144 3E 00           ld a,NBITS >> 8
+0489   0146 90              sub b
+0490   0147 38 07           jr c,shl_reg_0
+0491   0149 20 08           jr nz,shl_reg_1
+0492   014B             
+0493   014B 3E 38           ld a,NBITS & 255
+0494   014D 91              sub c
+0495   014E 30 03           jr nc, shl_reg_1
+0496   0150             
+0497   0150             shl_reg_0:
+0498   0150             
+0499   0150 01 38 00        ld bc,NBITS
+0500   0153             
+0501   0153             shl_reg_1:
+0502   0153             
+0503   0153             ;    int bytes = places >> 3;
+0504   0153             ;    int bits = places & 0x07;
+0505   0153 79              ld a,c
+0506   0154 E6 07           and 07h
+0507   0156 DD 77 02        ld (ix+2),a     ; IX+2 = 'bits'
+0508   0159 CB 38           srl b
+0509   015B CB 19           rr c
+0510   015D CB 38           srl b
+0511   015F CB 19           rr c
+0512   0161 CB 38           srl b
+0513   0163 CB 19           rr c            ; BC = 'bytes'
+0514   0165             
+0515   0165             ;    int leftbytes = NBYTES - bytes;
+0516   0165 21 07 00        ld hl,NBYTES
+0517   0168 AF              xor a
+0518   0169 ED 42           sbc hl,bc       ; HL = 'leftbytes'
+0519   016B DD 75 04        ld (ix+4),l     ; IX+4, IX+5 = 'leftbytes'
+0520   016E DD 74 05        ld (ix+5),h
+0521   0171             
+0522   0171             ;    if (bytes){
+0523   0171 78              ld a,b
+0524   0172 B1              or c
+0525   0173 28 17           jr z,shl_reg_2
+0526   0175             
+0527   0175             ;        if (leftbytes)
+0528   0175 7C              ld a,h
+0529   0176 B5              or l
+0530   0177 28 09           jr z,shl_reg_1a
+0531   0179             
+0532   0179 C5              push bc         ; Save 'bytes'
+0533   017A E5              push hl         ; Save 'leftbytes'
+0534   017B             
+0535   017B             ;            memmove(&reg[0], &reg[bytes], leftbytes);
+0536   017B 62              ld h,d
+0537   017C 6B              ld l,e
+0538   017D 09              add hl,bc       ; DE='reg' HL='reg[bytes]'
+0539   017E C1              pop bc          ; Restore 'leftbytes'
+0540   017F ED B0           ldir
+0541   0181             
+0542   0181 C1              pop bc          ; Restore 'bytes'
+0543   0182             
+0544   0182             shl_reg_1a:
+0545   0182             
+0546   0182             ;        memset(&reg[leftbytes],0,bytes);
+0547   0182             ;    }
+0548   0182             
+0549   0182 62              ld h,d  ; Here DE points to the 1st byte to fill w/ zero (obtained from the
+0550   0183 6B              ld l,e  ; previous LDIR if it took place, or the previous value).
+0551   0184             
+0552   0184             shl_reg_1b:
+0553   0184             
+0554   0184 AF              xor a
+0555   0185 77              ld (hl),a
+0556   0186 23              inc hl
+0557   0187 0B              dec bc
+0558   0188 78              ld a,b
+0559   0189 B1              or c
+0560   018A 20 F8           jr nz,shl_reg_1b
+0561   018C             
+0562   018C             shl_reg_2:
+0563   018C             
+0564   018C             ;    if (bits){
+0565   018C DD 7E 02        ld a,(ix+2)     ; 'bits'
+0566   018F B7              or a
+0567   0190 28 3E           jr z,shl_reg_end
+0568   0192             
+0569   0192             ;        for (i = 0; i < (leftbytes-1); i++){
+0570   0192                 ; Vai fazer o shift
+0571   0192 DD 4E 04        ld c,(ix+4)
+0572   0195 DD 46 05        ld b,(ix+5)     ;'leftbytes'
+0573   0198 78              ld a,b
+0574   0199 B1              or c
+0575   019A 28 2B           jr z,shl_reg_3
+0576   019C 0B              dec bc
+0577   019D 78              ld a,b
+0578   019E B1              or c
+0579   019F 28 26           jr z,shl_reg_3
+0580   01A1             
+0581   01A1 DD 6E 00        ld l,(ix+0)
+0582   01A4 DD 66 01        ld h,(ix+1)     ; HL = 'reg'
+0583   01A7             
+0584   01A7             shl_reg_2a:
+0585   01A7             
+0586   01A7             ;            reg[i] <<= bits;
+0587   01A7 DD 7E 02        ld a,(ix+2)     ; 'bits'
+0588   01AA 5F              ld e,a          ; 'bits'
+0589   01AB ED 44           neg
+0590   01AD C6 08           add a,8
+0591   01AF 57              ld d,a
+0592   01B0 7E              ld a,(hl)
+0593   01B1             
+0594   01B1             shl_reg_2b:
+0595   01B1             
+0596   01B1 CB 27           sla a
+0597   01B3 1D              dec e
+0598   01B4 20 FB           jr nz,shl_reg_2b
+0599   01B6             
+0600   01B6             ;            uint8_t aux = reg[i+1] >> (8-bits);
+0601   01B6 5F              ld e,a
+0602   01B7             
+0603   01B7 23              inc hl
+0604   01B8 7E              ld a,(hl)
+0605   01B9 2B              dec hl
+0606   01BA             
+0607   01BA             shl_reg_2c:
+0608   01BA             
+0609   01BA CB 3F           srl a
+0610   01BC 15              dec d
+0611   01BD 20 FB           jr nz,shl_reg_2c
+0612   01BF             
+0613   01BF             ;            reg[i] |= aux;
+0614   01BF             ;        }
+0615   01BF B3              or e
+0616   01C0 77              ld (hl),a
+0617   01C1 23              inc hl
+0618   01C2             
+0619   01C2 0B              dec bc
+0620   01C3 78              ld a,b
+0621   01C4 B1              or c
+0622   01C5 20 E0           jr nz,shl_reg_2a
+0623   01C7             
+0624   01C7             shl_reg_3:
+0625   01C7             ;        reg[leftbytes - 1] <<= bits;
+0626   01C7 7E              ld a,(hl)
+0627   01C8 DD 46 02        ld b,(IX+2)     ; 'bits'
+0628   01CB             
+0629   01CB             shl_reg_2d:
+0630   01CB             
+0631   01CB CB 27           sla a
+0632   01CD 10 FC           djnz shl_reg_2d
+0633   01CF             
+0634   01CF 77              ld (hl),a
+0635   01D0             
+0636   01D0             ;    }
+0637   01D0             
+0638   01D0             shl_reg_end:
+0639   01D0             
+0640   01D0 21 08 00        ld hl,0008h    ; Frees 8 bytes
+0641   01D3 39              add hl,sp
+0642   01D4 F9              ld sp,hl
+0643   01D5 DD E1           pop ix
+0644   01D7 C9              ret
+0645   01D8             
+0646   01D8             ;///////////////////////////////////////////////////////////////////////////////
+0647   01D8             stack_test:
+0648   01D8             
+0649   01D8 DD E5           push ix
+0650   01DA DD 21 F8 FF     ld ix,0FFF8h    ; Allocates 8 bytes
+0651   01DE DD 39           add ix,sp
+0652   01E0 DD F9           ld sp,ix
+0653   01E2             
+0654   01E2 DD 4E 00        ld c,(ix+0)
+0655   01E5 DD 46 01        ld b,(ix+1)
+0656   01E8                 ;....
+0657   01E8 21 08 00        ld hl,0008h    ; Frees 8 bytes
+0658   01EB 39              add hl,sp
+0659   01EC F9              ld sp,hl
+0660   01ED DD E1           pop ix
+0661   01EF C9              ret
+0662   01F0             
+0663   01F0             ;///////////////////////////////////////////////////////////////////////////////
+0664   01F0             ;   shr_reg
+0665   01F0             ;   void shr_reg(uint8_t *reg, int places);
+0666   01F0             ;   Parameters:
+0667   01F0             ;     DE: reg
+0668   01F0             ;     BC: places
+0669   01F0             ;   Returns: Nothing
+0670   01F0             ;   Affects: BC DE HL AF
+0671   01F0             shr_reg:
+0672   01F0             
+0673   01F0 DD E5           push ix
+0674   01F2 DD 21 F8 FF     ld ix,0FFF8h    ; Allocates 8 bytes
+0675   01F6 DD 39           add ix,sp
+0676   01F8 DD F9           ld sp,ix
+0677   01FA             
+0678   01FA DD 73 00        ld (ix+0),e     ; IX+0, IX+1 = 'reg'
+0679   01FD DD 72 01        ld (ix+1),d
+0680   0200             
+0681   0200             ;    if (places > NBITS)
+0682   0200             ;        places = NBITS;
+0683   0200 3E 00           ld a,NBITS >> 8
+0684   0202 90              sub b
+0685   0203 38 07           jr c,shr_reg_0
+0686   0205 20 08           jr nz,shr_reg_1
+0687   0207             
+0688   0207 3E 38           ld a,NBITS & 255
+0689   0209 91              sub c
+0690   020A 30 03           jr nc, shr_reg_1
+0691   020C             
+0692   020C             shr_reg_0:
+0693   020C             
+0694   020C 01 38 00        ld bc,NBITS
+0695   020F             
+0696   020F             shr_reg_1:
+0697   020F             
+0698   020F             ;    int bytes = places >> 3;
+0699   020F             ;    int bits = places & 0x07;
+0700   020F 79              ld a,c
+0701   0210 E6 07           and 07h
+0702   0212 DD 77 02        ld (ix+2),a     ; IX+2 = 'bits'
+0703   0215 CB 38           srl b
+0704   0217 CB 19           rr c
+0705   0219 CB 38           srl b
+0706   021B CB 19           rr c
+0707   021D CB 38           srl b
+0708   021F CB 19           rr c            ; BC = 'bytes'
+0709   0221 DD 71 06        ld (ix+6),c
+0710   0224 DD 70 07        ld (ix+7),b     ; IX+6, IX+7 = 'bytes'
+0711   0227             
+0712   0227             ;    int rightbytes = NBYTES - bytes;
+0713   0227 21 07 00        ld hl,NBYTES
+0714   022A AF              xor a
+0715   022B ED 42           sbc hl,bc       ; HL = 'rightbytes'
+0716   022D DD 75 04        ld (ix+4),l     ; IX+4, IX+5 = 'rightbytes'
+0717   0230 DD 74 05        ld (ix+5),h
+0718   0233             
+0719   0233             ;    if (bytes){
+0720   0233 78              ld a,b
+0721   0234 B1              or c
+0722   0235 28 29           jr z,shr_reg_2
+0723   0237             
+0724   0237             ;        if (rightbytes)
+0725   0237 7C              ld a,h
+0726   0238 B5              or l
+0727   0239 28 11           jr z,shr_reg_1a
+0728   023B             
+0729   023B             ;            memmove(&reg[bytes], &reg[0], rightbytes);
+0730   023B 21 06 00        ld hl,NBYTES1
+0731   023E 19              add hl,de
+0732   023F 54              ld d,h
+0733   0240 5D              ld e,l          ; DE = last buffer's byte (destination)
+0734   0241             
+0735   0241 AF              xor a           ; BC = 'bytes'
+0736   0242 ED 42           sbc hl,bc       ; HL = origem
+0737   0244 DD 4E 04        ld c,(ix+4)     ; 'rightbytes'
+0738   0247 DD 46 05        ld b,(ix+5)
+0739   024A ED B8           lddr
+0740   024C             
+0741   024C             shr_reg_1a:
+0742   024C             
+0743   024C             ;        memset(&reg[0],0,bytes);
+0744   024C DD 4E 06        ld c,(ix+6)
+0745   024F DD 46 07        ld b,(ix+7)     ; IX+6, IX+7 = 'bytes'
+0746   0252 DD 6E 00        ld l,(ix+0)
+0747   0255 DD 66 01        ld h,(ix+1)     ; IX+0, IX+1 = 'reg'
+0748   0258             
+0749   0258             shr_reg_1b:
+0750   0258             
+0751   0258 AF              xor a
+0752   0259 77              ld (hl),a
+0753   025A 23              inc hl
+0754   025B 0B              dec bc
+0755   025C 78              ld a,b
+0756   025D B1              or c
+0757   025E 20 F8           jr nz,shr_reg_1b
+0758   0260             
+0759   0260             ;    }
+0760   0260             
+0761   0260             shr_reg_2:
+0762   0260             
+0763   0260             ;    if (bits){
+0764   0260 DD 7E 02        ld a,(ix+2)     ; 'bits'
+0765   0263 B7              or a
+0766   0264 28 45           jr z,shr_reg_end
+0767   0266             
+0768   0266             
+0769   0266             ;        for (i = NBYTES1; i > bytes; i--){
+0770   0266 21 06 00        ld hl,NBYTES1
+0771   0269 DD 4E 06        ld c,(ix+6)
+0772   026C DD 46 07        ld b,(ix+7)     ; IX+6, IX+7 = 'bytes'
+0773   026F AF              xor a
+0774   0270 ED 42           sbc hl,bc
+0775   0272             
+0776   0272 7C              ld a,h
+0777   0273 B5              or l
+0778   0274 28 2C           jr z,shr_reg_2e
+0779   0276             
+0780   0276 44              ld b,h
+0781   0277 4D              ld c,l          ; BC = # of bytes to process
+0782   0278             
+0783   0278 DD 6E 00        ld l,(ix+0)
+0784   027B DD 66 01        ld h,(ix+1)     ; HL = 'reg'
+0785   027E             
+0786   027E 11 06 00        ld de,NBYTES1
+0787   0281 19              add hl,de
+0788   0282             
+0789   0282             shr_reg_2a:
+0790   0282             
+0791   0282             ;            reg[i] >>= bits;
+0792   0282 DD 7E 02        ld a,(ix+2)     ; 'bits'
+0793   0285 5F              ld e,a          ; E = 'bits'
+0794   0286 ED 44           neg
+0795   0288 C6 08           add a,8
+0796   028A 57              ld d,a          ; D = 8 - 'bits'
+0797   028B 7E              ld a,(hl)
+0798   028C             
+0799   028C             shr_reg_2b:
+0800   028C             
+0801   028C CB 3F           srl a
+0802   028E 1D              dec e
+0803   028F 20 FB           jr nz,shr_reg_2b
+0804   0291             
+0805   0291 5F              ld e,a
+0806   0292             
+0807   0292             ;            uint8_t aux = reg[i-1] << (8-bits);
+0808   0292 2B              dec hl
+0809   0293 7E              ld a,(hl)
+0810   0294 23              inc hl
+0811   0295             
+0812   0295             shr_reg_2c:
+0813   0295             
+0814   0295 CB 27           sla a
+0815   0297 15              dec d
+0816   0298 20 FB           jr nz,shr_reg_2c
+0817   029A             
+0818   029A             ;            reg[i] |= aux;
+0819   029A B3              or e
+0820   029B 77              ld (hl),a
+0821   029C             
+0822   029C             ;        }
+0823   029C 2B              dec hl
+0824   029D 0B              dec bc
+0825   029E 78              ld a,b
+0826   029F B1              or c
+0827   02A0 20 E0           jr nz,shr_reg_2a
+0828   02A2             
+0829   02A2             shr_reg_2e:
+0830   02A2             
+0831   02A2             ;        reg[bytes] >>= bits;
+0832   02A2 7E              ld a,(hl)
+0833   02A3 DD 46 02        ld b,(IX+2)     ; 'bits'
+0834   02A6             
+0835   02A6             shr_reg_2d:
+0836   02A6 CB 3F           srl a
+0837   02A8 10 FC           djnz shr_reg_2d
+0838   02AA 77              ld (hl),a
+0839   02AB             
+0840   02AB             ;    }
+0841   02AB             
+0842   02AB             shr_reg_end:
+0843   02AB             
+0844   02AB 21 08 00        ld hl,0008h    ; Frees 8 bytes
+0845   02AE 39              add hl,sp
+0846   02AF F9              ld sp,hl
+0847   02B0 DD E1           pop ix
+0848   02B2 C9              ret
+0849   02B3             
+0850   02B3             ;///////////////////////////////////////////////////////////////////////////////
+0851   02B3             ;   mul_reg2_by_reg1
+0852   02B3             ;   void mul_reg2_by_reg1(const uint8_t *reg1, uint8_t *reg2);
+0853   02B3             ;   Parameters:
+0854   02B3             ;     HL: reg1
+0855   02B3             ;     DE: reg2
+0856   02B3             ;   Returns: Nothing
+0857   02B3             ;   Affects: BC DE HL AF IY BC' DE' HL' AF'
+0858   02B3             mul_reg2_by_reg1:
+0859   02B3             
+0860   02B3 DD E5           push ix
+picalc.asm line 0861: Unused data in MS byte of argument. (6)
+0861   02B5 DD 21 BA FF     ld ix,0FFF8h-2*NBYTES    ; Allocates 8 bytes + 2 buffers
+0862   02B9 DD 39           add ix,sp
+0863   02BB DD F9           ld sp,ix
+0864   02BD             
+0865   02BD DD 75 00        ld (ix+0),l
+0866   02C0 DD 74 01        ld (ix+1),h         ; IX+0, IX+1: reg1
+0867   02C3 DD 73 02        ld (ix+2),e
+0868   02C6 DD 72 03        ld (ix+3),d         ; IX+2, IX+3: reg2
+0869   02C9             
+0870   02C9             ;    uint8_t regmdiv[NBYTES];
+0871   02C9 DD              .db 0ddh
+0872   02CA 4D              ld c,l
+0873   02CB DD              .db 0ddh
+0874   02CC 44              ld b,h            ; Copia IX em BC
+0875   02CD 21 08 00        ld HL,8
+0876   02D0 09              add hl,bc
+0877   02D1 DD 75 04        ld (ix+4),l
+0878   02D4 DD 74 05        ld (ix+5),h         ; IX+4, IX+5: regmdiv
+0879   02D7             
+0880   02D7             ;    uint8_t regmdiv2[NBYTES];
+0881   02D7 01 07 00        ld bc,NBYTES
+0882   02DA 09              add hl,bc
+0883   02DB DD 75 06        ld (ix+6),l
+0884   02DE DD 74 07        ld (ix+7),h         ; IX+6, IX+7: regmdiv2
+0885   02E1             
+0886   02E1             ;    memcpy(regmdiv, reg2, NBYTES);
+0887   02E1 DD 5E 04        ld e,(ix+4)
+0888   02E4 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+0889   02E7 DD 6E 02        ld l,(ix+2)
+0890   02EA DD 66 03        ld h,(ix+3)         ; IX+2, IX+3: reg2
+0891   02ED 01 07 00        ld bc,NBYTES
+0892   02F0 ED B0           ldir
+0893   02F2             
+0894   02F2             ;    memcpy(regmdiv2, reg2, NBYTES);
+0895   02F2 DD 5E 06        ld e,(ix+6)
+0896   02F5 DD 56 07        ld d,(ix+7)         ; IX+6, IX+7: regmdiv2
+0897   02F8 DD 6E 02        ld l,(ix+2)
+0898   02FB DD 66 03        ld h,(ix+3)         ; IX+2, IX+3: reg2
+0899   02FE 01 07 00        ld bc,NBYTES
+0900   0301 ED B0           ldir
+0901   0303             
+0902   0303             ;    zero_reg(reg2);
+0903   0303 DD 6E 02        ld l,(ix+2)
+0904   0306 DD 66 03        ld h,(ix+3)
+0905   0309 CD 82 00        call zero_reg       ;Zera reg2
+0906   030C             
+0907   030C             ;    int places = 0;
+0908   030C FD 21 00 00     ld iy,0             ; IY = places
+0909   0310             
+0910   0310             ;    // Integer part
+0911   0310             ;    for (int i = NBYTES_INT-1; i>=0; i--){
+0912   0310             
+0913   0310 01 02 00        ld bc,NBYTES_INT
+0914   0313 DD 6E 00        ld l,(ix+0)
+0915   0316 DD 66 01        ld h,(ix+1)       ; IX+0, IX+1: reg1
+0916   0319 09              add hl,bc
+0917   031A 2B              dec hl            ; HL: buffer to process
+0918   031B             
+0919   031B             mul_reg2_by_reg1_1:
+0920   031B             
+0921   031B             ;        int msk = 1;
+0922   031B 16 01           ld d,1
+0923   031D             
+0924   031D             ;        for (int j = 0; j < 8; j++){
+0925   031D 1E 08           ld e,8
+0926   031F             
+0927   031F             mul_reg2_by_reg1_2:
+0928   031F             
+0929   031F             ;            if (reg1[i] & msk){
+0930   031F 7E              ld a,(hl)
+0931   0320 A2              and d
+0932   0321 28 28           jr z, mul_reg2_by_reg1_3
+0933   0323             
+0934   0323             ;                shl_reg(regmdiv,places);
+0935   0323 C5              push bc
+0936   0324 D5              push de
+0937   0325 E5              push hl
+0938   0326             
+0939   0326 DD 5E 04        ld e,(ix+4)
+0940   0329 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+0941   032C FD              .db 0fdh
+0942   032D 44              ld b,h
+0943   032E FD              .db 0fdh
+0944   032F 4D              ld c,l            ; BC gets IY = 'places'
+0945   0330 CD 34 01        call shl_reg
+0946   0333             
+0947   0333             ;                add_reg2_to_reg1(reg2, regmdiv);
+0948   0333 DD 5E 02        ld e,(ix+2)
+0949   0336 DD 56 03        ld d,(ix+3)         ; IX+2, IX+3: reg2
+0950   0339 DD 6E 04        ld l,(ix+4)
+0951   033C DD 66 05        ld h,(ix+5)         ; IX+4, IX+5: regmdiv
+0952   033F CD BD 00        call add_reg2_to_reg1
+0953   0342             
+0954   0342 E1              pop hl
+0955   0343 D1              pop de
+0956   0344 C1              pop bc
+0957   0345             
+0958   0345             ;                places = 1;
+0959   0345 FD 21 01 00     ld iy,1     ; IY = places
+0960   0349             ;            }
+0961   0349             ;            else
+0962   0349             ;                places++;
+0963   0349 18 02           jr mul_reg2_by_reg1_4
+0964   034B             
+0965   034B             mul_reg2_by_reg1_3:
+0966   034B             
+0967   034B FD 23           inc iy
+0968   034D             
+0969   034D             mul_reg2_by_reg1_4:
+0970   034D             
+0971   034D             ;            msk <<= 1;
+0972   034D 7A              ld a,d
+0973   034E CB 27           sla a
+0974   0350 57              ld d,a
+0975   0351             
+0976   0351             ;        }
+0977   0351 1D              dec e
+0978   0352 20 CB           jr nz,mul_reg2_by_reg1_2
+0979   0354             
+0980   0354             ;    }
+0981   0354 2B              dec hl
+0982   0355 0B              dec bc
+0983   0356 78              ld a,b
+0984   0357 B1              or c
+0985   0358 20 C1           jr nz,mul_reg2_by_reg1_1
+0986   035A             
+0987   035A             ;    memcpy(regmdiv, regmdiv2, NBYTES);
+0988   035A DD 6E 06        ld l,(ix+6)
+0989   035D DD 66 07        ld h,(ix+7)         ; IX+6, IX+7: regmdiv2
+0990   0360 DD 5E 04        ld e,(ix+4)
+0991   0363 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+0992   0366 01 07 00        ld bc,NBYTES
+0993   0369 ED B0           ldir
+0994   036B             
+0995   036B             ;    shr_reg(regmdiv,1);
+0996   036B DD 5E 04        ld e,(ix+4)
+0997   036E DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+0998   0371 01 01 00        ld bc,1
+0999   0374 CD F0 01        call shr_reg
+1000   0377             
+1001   0377             ;    places = 0;
+1002   0377 FD 21 00 00     ld iy,0
+1003   037B             
+1004   037B             ;    //Frac part
+1005   037B             ;    for (int i = NBYTES_INT; i < NBYTES; i++){
+1006   037B DD 6E 00        ld l,(ix+0)
+1007   037E DD 66 01        ld h,(ix+1)         ; IX+0, IX+1: reg1
+1008   0381 01 02 00        ld bc,NBYTES_INT
+1009   0384 09              add hl,bc
+1010   0385 01 05 00        ld bc, NBYTES - NBYTES_INT
+1011   0388             
+1012   0388             mul_reg2_by_reg1_5:
+1013   0388             
+1014   0388             ;        int msk = 128;
+1015   0388 16 80           ld d,128
+1016   038A             
+1017   038A             ;        for (int j = 0; j < 8; j++){
+1018   038A 1E 08           ld e,8
+1019   038C             
+1020   038C             mul_reg2_by_reg1_6:
+1021   038C             
+1022   038C             ;            if (reg1[i] & msk){
+1023   038C 7E              ld a,(hl)
+1024   038D A2              and d
+1025   038E 28 28           jr z,mul_reg2_by_reg1_7
+1026   0390             
+1027   0390 C5              push bc
+1028   0391 D5              push de
+1029   0392 E5              push hl
+1030   0393             
+1031   0393             ;                shr_reg(regmdiv,places);
+1032   0393 DD 5E 04        ld e,(ix+4)
+1033   0396 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+1034   0399 FD              .db 0fdh
+1035   039A 44              ld b,h
+1036   039B FD              .db 0fdh
+1037   039C 4D              ld c,l            ; BC <- IY = 'places'
+1038   039D CD F0 01        call shr_reg
+1039   03A0             
+1040   03A0             ;                add_reg2_to_reg1(reg2, regmdiv);
+1041   03A0 DD 5E 02        ld e,(ix+2)
+1042   03A3 DD 56 03        ld d,(ix+3)         ; IX+2, IX+3: reg2
+1043   03A6 DD 6E 04        ld l,(ix+4)
+1044   03A9 DD 66 05        ld h,(ix+5)         ; IX+4, IX+5: regmdiv
+1045   03AC CD BD 00        call add_reg2_to_reg1
+1046   03AF             
+1047   03AF E1              pop hl
+1048   03B0 D1              pop de
+1049   03B1 C1              pop bc
+1050   03B2             
+1051   03B2             ;                places = 1;
+1052   03B2 FD 21 01 00     ld iy,1
+1053   03B6 18 02           jr mul_reg2_by_reg1_8
+1054   03B8             ;            }
+1055   03B8             ;            else
+1056   03B8             ;                places++;
+1057   03B8             mul_reg2_by_reg1_7:
+1058   03B8             
+1059   03B8 FD 23           inc iy
+1060   03BA             
+1061   03BA             mul_reg2_by_reg1_8:
+1062   03BA             
+1063   03BA             ;            msk >>= 1;
+1064   03BA 7A              ld a,d
+1065   03BB CB 3F           srl a
+1066   03BD 57              ld d,a
+1067   03BE             
+1068   03BE             ;        }
+1069   03BE 1D              dec e
+1070   03BF 20 CB           jr nz, mul_reg2_by_reg1_6
+1071   03C1             
+1072   03C1             ;    }
+1073   03C1 23              inc hl
+1074   03C2 0B              dec bc
+1075   03C3 78              ld a,b
+1076   03C4 B1              or c
+1077   03C5 20 C1           jr nz,mul_reg2_by_reg1_5
+1078   03C7             
+1079   03C7             mul_reg2_by_reg1_end:
+1080   03C7             
+1081   03C7 21 46 00        ld hl,0008h+2*NBYTES    ; Frees 8 bytes + 2 buffers
+1082   03CA 39              add hl,sp
+1083   03CB F9              ld sp,hl
+1084   03CC DD E1           pop ix
+1085   03CE C9              ret
+1086   03CF             
+1087   03CF             ;///////////////////////////////////////////////////////////////////////////////
+1088   03CF             ;   mul_acc_by_reg
+1089   03CF             ;   void mul_acc_by_reg(const uint8_t *reg);
+1090   03CF             ;   Parameters:
+1091   03CF             ;     HL: reg
+1092   03CF             ;   Returns: Nothing
+1093   03CF             ;   Affects: BC DE HL AF IY BC' DE' HL' AF'
+1094   03CF             mul_acc_by_reg:
+1095   03CF             
+1096   03CF             ;    mul_reg2_by_reg1(reg, acc);
+1097   03CF 11 00 20        ld de,acc
+1098   03D2 CD B3 02        call mul_reg2_by_reg1
+1099   03D5 C9              ret
+1100   03D6             
+1101   03D6             ;///////////////////////////////////////////////////////////////////////////////
+1102   03D6             ;   mul_reg_10
+1103   03D6             ;   void mul_reg_10(uint8_t *reg);
+1104   03D6             ;   Parameters:
+1105   03D6             ;     DE: reg
+1106   03D6             ;   Returns: Nothing
+1107   03D6             ;   Affects: BC DE HL AF IY BC' DE' HL' AF'
+1108   03D6             mul_reg_10:
+1109   03D6             
+1110   03D6 DD E5           push ix
+1111   03D8 DD 21 F1 FF     ld ix,0FFF8h-NBYTES    ; Allocates 8 bytes + buffer
+1112   03DC DD 39           add ix,sp
+1113   03DE DD F9           ld sp,ix
+1114   03E0             
+1115   03E0 DD 73 00        ld (ix+0),e
+1116   03E3 DD 72 01        ld (ix+1),d         ; IX+0, IX+1: reg
+1117   03E6             
+1118   03E6             ;    uint8_t regmdiv[NBYTES];
+1119   03E6 DD              .db 0ddh
+1120   03E7 4D              ld c,l
+1121   03E8 DD              .db 0ddh
+1122   03E9 44              ld b,h            ; Copy IX -> BC
+1123   03EA 21 08 00        ld HL,8
+1124   03ED 09              add hl,bc
+1125   03EE DD 75 04        ld (ix+4),l
+1126   03F1 DD 74 05        ld (ix+5),h         ; IX+4, IX+5: regmdiv
+1127   03F4             
+1128   03F4             ;    memcpy(regmdiv, reg, NBYTES);
+1129   03F4 DD 5E 04        ld e,(ix+4)
+1130   03F7 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+1131   03FA DD 6E 00        ld l,(ix+0)
+1132   03FD DD 66 01        ld h,(ix+1)         ; IX+0, IX+1: reg
+1133   0400 01 07 00        ld bc,NBYTES
+1134   0403 ED B0           ldir
+1135   0405             
+1136   0405             ;    shl_reg(reg, 1);
+1137   0405 DD 5E 00        ld e,(ix+0)
+1138   0408 DD 56 01        ld d,(ix+1)         ; IX+0, IX+1: reg
+1139   040B 01 01 00        ld bc,1
+1140   040E CD 34 01        call shl_reg
+1141   0411             
+1142   0411             ;    shl_reg(regmdiv, 3);
+1143   0411 DD 5E 04        ld e,(ix+4)
+1144   0414 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+1145   0417 01 03 00        ld bc,3
+1146   041A CD 34 01        call shl_reg
+1147   041D             
+1148   041D             ;    add_reg2_to_reg1(reg,regmdiv);
+1149   041D DD 5E 00        ld e,(ix+0)
+1150   0420 DD 56 01        ld d,(ix+1)         ; IX+0, IX+1: reg
+1151   0423 DD 6E 04        ld l,(ix+4)
+1152   0426 DD 66 05        ld h,(ix+5)         ; IX+4, IX+5: regmdiv
+1153   0429 CD BD 00        call add_reg2_to_reg1
+1154   042C             
+1155   042C 21 0F 00        ld hl,0008h+NBYTES    ; Frees 8 bytes + buffer
+1156   042F 39              add hl,sp
+1157   0430 F9              ld sp,hl
+1158   0431 DD E1           pop ix
+1159   0433 C9              ret
+1160   0434             
+1161   0434             ;///////////////////////////////////////////////////////////////////////////////
+1162   0434             ;   compare
+1163   0434             ;   int compare (const uint8_t *reg1, const uint8_t *reg2);
+1164   0434             ;   Parameters:
+1165   0434             ;     HL: reg1
+1166   0434             ;     DE: reg2
+1167   0434             ;   Returns: Flags: Z:        reg1 = reg2
+1168   0434             ;                   NZ & C:   reg1 < reg2
+1169   0434             ;                   NC & NC:  reg1 > reg2
+1170   0434             ;   Affects: BC DE HL AF
+1171   0434             compare:
+1172   0434             
+1173   0434             ;    for (int i = 0; i < NBYTES; i++){
+1174   0434 01 07 00        ld bc,NBYTES
+1175   0437             
+1176   0437             compare_1:
+1177   0437             
+1178   0437             ;        if (reg1[i] < reg2[i]) return -1;   // reg1 < reg2
+1179   0437             ;        if (reg1[i] > reg2[i]) return 1;    // reg1 > reg2
+1180   0437             ;    }
+1181   0437             
+1182   0437 1A              ld a,(de)
+1183   0438 ED A1           cpi
+1184   043A 20 06           jr nz,compare_2
+1185   043C 13              inc de
+1186   043D EA 37 04        jp pe,compare_1
+1187   0440             
+1188   0440             ;    return 0;   // Same value
+1189   0440 AF              xor a
+1190   0441 C9              ret
+1191   0442             
+1192   0442             compare_2:
+1193   0442 2B              dec hl
+1194   0443 BE              cp (hl)
+1195   0444 3F              ccf
+1196   0445 C9              ret
+1197   0446             
+1198   0446             ;///////////////////////////////////////////////////////////////////////////////
+1199   0446             ;   iszero
+1200   0446             ;   int iszero (const uint8_t *reg);
+1201   0446             ;   Parameters:
+1202   0446             ;     HL: reg
+1203   0446             ;   Returns: Flags: Z:        reg = 0
+1204   0446             ;                   NZ:       reg1 != 0
+1205   0446             ;   Affects: BC DE HL AF
+1206   0446             iszero:
+1207   0446             
+1208   0446             ;    for (int i = 0; i < NBYTES; i++){
+1209   0446 01 07 00        ld bc,NBYTES
+1210   0449 AF              xor a
+1211   044A             
+1212   044A             iszero_1:
+1213   044A             
+1214   044A             ;        if (reg[i]) return 0;   // nonzero
+1215   044A ED A1           cpi
+1216   044C C0              ret nz
+1217   044D             
+1218   044D             ;    }
+1219   044D EA 4A 04        jp pe,iszero_1
+1220   0450             
+1221   0450             ;    return 1;   // Is zero
+1222   0450 AF              xor a
+1223   0451 C9              ret
+1224   0452             
+1225   0452             ;///////////////////////////////////////////////////////////////////////////////
+1226   0452             ;   div_reg2_by_reg1
+1227   0452             ;   int div_reg2_by_reg1(const uint8_t *reg1, uint8_t *reg2);
+1228   0452             ;   Parameters:
+1229   0452             ;     HL: reg1
+1230   0452             ;     DE: reg2
+1231   0452             ;   Returns: Flags: Z:        Div OK
+1232   0452             ;                   NZ:       Div Error
+1233   0452             ;   Affects: BC DE HL AF IY BC' DE' HL' AF'
+1234   0452             div_reg2_by_reg1:
+1235   0452             
+1236   0452 DD E5           push ix
+picalc.asm line 1237: Unused data in MS byte of argument. (6)
+1237   0454 DD 21 A5 FF     ld ix,0FFF6h-3*NBYTES    ; Allocates 10 bytes + 3 buffers
+1238   0458 DD 39           add ix,sp
+1239   045A DD F9           ld sp,ix
+1240   045C             
+1241   045C DD 75 00        ld (ix+0),l
+1242   045F DD 74 01        ld (ix+1),h         ; IX+0, IX+1: reg1
+1243   0462 DD 73 02        ld (ix+2),e
+1244   0465 DD 72 03        ld (ix+3),d         ; IX+2, IX+3: reg2
+1245   0468             
+1246   0468             ;    uint8_t regmdiv[NBYTES];
+1247   0468 DD              .db 0ddh
+1248   0469 4D              ld c,l
+1249   046A DD              .db 0ddh
+1250   046B 44              ld b,h            ; Copia IX em BC
+1251   046C 21 0A 00        ld HL,10
+1252   046F 09              add hl,bc
+1253   0470 DD 75 04        ld (ix+4),l
+1254   0473 DD 74 05        ld (ix+5),h         ; IX+4, IX+5: regmdiv
+1255   0476             
+1256   0476             ;    uint8_t regmdiv2[NBYTES];
+1257   0476 01 07 00        ld bc,NBYTES
+1258   0479 09              add hl,bc
+1259   047A DD 75 06        ld (ix+6),l
+1260   047D DD 74 07        ld (ix+7),h         ; IX+6, IX+7: regmdiv2
+1261   0480             
+1262   0480             ;    if (iszero(reg1)) return -1; // Divide by zero
+1263   0480 DD 6E 00        ld l,(ix+0)
+1264   0483 DD 66 01        ld h,(ix+1)         ; IX+0, IX+1: reg
+1265   0486 CD 46 04        call iszero
+1266   0489 20 05           jr nz, div_reg2_by_reg1_1
+1267   048B 3E FF           ld a,0ffh
+1268   048D C3 21 06        jp div_reg2_by_reg1_end
+1269   0490             
+1270   0490             div_reg2_by_reg1_1:
+1271   0490             
+1272   0490             ;    int res = compare (reg2, reg1);
+1273   0490             ;    if (res == 0){   // iguais
+1274   0490             ;        zero_reg(reg2);
+1275   0490             ;        set_bit_reg_int(reg2, 0);    //1
+1276   0490             ;        return 0;   //ok
+1277   0490             ;    }
+1278   0490 DD 6E 00        ld l,(ix+0)
+1279   0493 DD 66 01        ld h,(ix+1)         ; IX+0, IX+1: reg1
+1280   0496 DD 5E 02        ld e,(ix+2)
+1281   0499 DD 56 03        ld d,(ix+3)         ; IX+2, IX+3: reg2
+1282   049C CD 34 04        call compare
+1283   049F 20 19           jr nz, div_reg2_by_reg1_2
+1284   04A1             
+1285   04A1 DD 6E 02        ld l,(ix+2)
+1286   04A4 DD 66 03        ld h,(ix+3)         ; IX+2, IX+3: reg2
+1287   04A7 CD 82 00        call zero_reg
+1288   04AA DD 6E 02        ld l,(ix+2)
+1289   04AD DD 66 03        ld h,(ix+3)         ; IX+2, IX+3: reg2
+1290   04B0 01 00 00        ld bc,0
+1291   04B3 CD B7 00        call set_bit_reg_int
+1292   04B6 AF              xor a
+1293   04B7 C3 21 06        jp div_reg2_by_reg1_end
+1294   04BA             
+1295   04BA             div_reg2_by_reg1_2:
+1296   04BA             
+1297   04BA             ;    uint8_t regquot[NBYTES];
+1298   04BA 01 07 00        ld bc,NBYTES
+1299   04BD DD 6E 06        ld l,(ix+6)
+1300   04C0 DD 66 07        ld h,(ix+7)         ; IX+6, IX+7: regmdiv2
+1301   04C3 09              add hl,bc
+1302   04C4 DD 75 08        ld (ix+8),l
+1303   04C7 DD 74 09        ld (ix+9),h         ; IX+8, IX+9: regquot
+1304   04CA             
+1305   04CA             ;    zero_reg(regquot);
+1306   04CA                 ;ld l,(ix+8)
+1307   04CA                 ;ld h,(ix+9)         ; IX+8, IX+9: regquot
+1308   04CA CD 82 00        call zero_reg
+1309   04CD             
+1310   04CD             ;    memcpy(regmdiv, reg1, NBYTES);
+1311   04CD DD 5E 04        ld e,(ix+4)
+1312   04D0 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+1313   04D3 DD 6E 00        ld l,(ix+0)
+1314   04D6 DD 66 01        ld h,(ix+1)         ; IX+0, IX+1: reg1
+1315   04D9 01 07 00        ld bc,NBYTES
+1316   04DC ED B0           ldir
+1317   04DE             
+1318   04DE             ;    memcpy(regmdiv2, reg1, NBYTES);
+1319   04DE DD 5E 06        ld e,(ix+6)
+1320   04E1 DD 56 07        ld d,(ix+7)         ; IX+6, IX+7: regmdiv2
+1321   04E4 DD 6E 00        ld l,(ix+0)
+1322   04E7 DD 66 01        ld h,(ix+1)         ; IX+0, IX+1: reg1
+1323   04EA 01 07 00        ld bc,NBYTES
+1324   04ED ED B0           ldir
+1325   04EF             
+1326   04EF             ;    for (;!iszero(reg2);){
+1327   04EF             div_reg2_by_reg1_3:
+1328   04EF             
+1329   04EF DD 6E 02        ld l,(ix+2)
+1330   04F2 DD 66 03        ld h,(ix+3)         ; IX+2, IX+3: reg2
+1331   04F5 CD 46 04        call iszero
+1332   04F8 CA 0F 06        jp z, div_reg2_by_reg1_5
+1333   04FB             
+1334   04FB             ;        int res = compare (reg2, regmdiv);
+1335   04FB DD 6E 02        ld l,(ix+2)
+1336   04FE DD 66 03        ld h,(ix+3)         ; IX+2, IX+3: reg2
+1337   0501 DD 5E 04        ld e,(ix+4)
+1338   0504 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+1339   0507 CD 34 04        call compare
+1340   050A             
+1341   050A             ;        if (res == -1){ // reg2 < regmdiv
+1342   050A D2 8B 05        jp nc, div_reg2_by_reg1_4
+1343   050D CA 8B 05        jp z, div_reg2_by_reg1_4
+1344   0510             
+1345   0510             ;            int order = 0;
+1346   0510 FD 21 00 00     ld iy,0
+1347   0514             
+1348   0514             ;            for (;!iszero(reg2);){
+1349   0514             div_reg2_by_reg1_3a:
+1350   0514             
+1351   0514 DD 6E 02        ld l,(ix+2)
+1352   0517 DD 66 03        ld h,(ix+3)         ; IX+2, IX+3: reg2
+1353   051A CD 46 04        call iszero
+1354   051D 28 57           jr z, div_reg2_by_reg1_3b
+1355   051F             
+1356   051F             ;                if (compare(reg2, regmdiv) < 0){ //reg2 < regmdiv
+1357   051F             
+1358   051F DD 6E 02        ld l,(ix+2)
+1359   0522 DD 66 03        ld h,(ix+3)         ; IX+2, IX+3: reg2
+1360   0525 DD 5E 04        ld e,(ix+4)
+1361   0528 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+1362   052B CD 34 04        call compare
+1363   052E 30 1F           jr nc, div_reg2_by_reg1_3c
+1364   0530 28 1D           jr z, div_reg2_by_reg1_3c
+1365   0532             
+1366   0532             ;                    shr_reg(regmdiv, 1);
+1367   0532 DD 5E 04        ld e,(ix+4)
+1368   0535 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+1369   0538 01 01 00        ld bc,1
+1370   053B CD F0 01        call shr_reg
+1371   053E             
+1372   053E             ;                    order++;
+1373   053E FD 23           inc iy
+1374   0540             ;                    if (order >= NBITS_FRAC){
+1375   0540             ;                        memcpy(reg2, regquot, NBYTES);
+1376   0540             ;                        return 0;
+1377   0540             ;                    }
+1378   0540 FD              .db 0fdh
+1379   0541 54              ld d,h
+1380   0542 FD              .db 0fdh
+1381   0543 5D              ld e,l
+1382   0544 EB              ex de,hl
+1383   0545 11 28 00        ld de,NBITS_FRAC
+1384   0548 AF              xor a
+1385   0549 ED 52           sbc hl,de
+1386   054B 30 29           jr nc, div_reg2_by_reg1_3b
+1387   054D             
+1388   054D             ;                   continue;
+1389   054D 18 C5           jr div_reg2_by_reg1_3a
+1390   054F             ;                }
+1391   054F             
+1392   054F             div_reg2_by_reg1_3c:
+1393   054F             
+1394   054F             ;                sub_reg2_from_reg1(reg2, regmdiv);
+1395   054F DD 6E 04        ld l,(ix+4)
+1396   0552 DD 66 05        ld h,(ix+5)         ; IX+0, IX+1: regmdiv
+1397   0555 DD 5E 02        ld e,(ix+2)
+1398   0558 DD 56 03        ld d,(ix+3)         ; IX+2, IX+3: reg2
+1399   055B CD 0F 01        call sub_reg2_from_reg1
+1400   055E             
+1401   055E             ;                set_bit_reg(regquot, NBITS_FRAC - order);
+1402   055E 21 28 00        ld hl,NBITS_FRAC
+1403   0561 FD              .db 0fdh
+1404   0562 4D              ld c,l
+1405   0563 FD              .db 0fdh
+1406   0564 44              ld b,h
+1407   0565 AF              xor a
+1408   0566 ED 42           sbc hl,bc
+1409   0568 4D              ld c,l
+1410   0569 44              ld b,h
+1411   056A DD 6E 08        ld l,(ix+8)
+1412   056D DD 66 09        ld h,(ix+9)         ; IX+8, IX+9: regquot
+1413   0570 CD 8D 00        call set_bit_reg
+1414   0573             
+1415   0573             ;            }
+1416   0573 C3 14 05        jp div_reg2_by_reg1_3a
+1417   0576             
+1418   0576             div_reg2_by_reg1_3b:
+1419   0576             
+1420   0576             ;            memcpy(reg2, regquot, NBYTES);
+1421   0576 DD 5E 02        ld e,(ix+2)
+1422   0579 DD 56 03        ld d,(ix+3)         ; IX+2, IX+3: reg2
+1423   057C DD 6E 08        ld l,(ix+8)
+1424   057F DD 66 09        ld h,(ix+9)         ; IX+8, IX+9: regquot
+1425   0582 01 07 00        ld bc,NBYTES
+1426   0585 ED B0           ldir
+1427   0587             
+1428   0587             ;            return 0;
+1429   0587 AF              xor a
+1430   0588 C3 21 06        jp div_reg2_by_reg1_end
+1431   058B             
+1432   058B             ;        }
+1433   058B             ;        else{   // reg2 >= regmdiv
+1434   058B             
+1435   058B             div_reg2_by_reg1_4:
+1436   058B             
+1437   058B             ;            int order = 0;
+1438   058B FD 21 00 00     ld iy,0
+1439   058F             
+1440   058F             ;            for (;;){
+1441   058F             div_reg2_by_reg1_4a:
+1442   058F             
+1443   058F             ;                if (compare(reg2, regmdiv) < 0){ //reg2 < regmdiv
+1444   058F             ;                    break;
+1445   058F             ;                }
+1446   058F DD 6E 02        ld l,(ix+2)
+1447   0592 DD 66 03        ld h,(ix+3)         ; IX+2, IX+3: reg2
+1448   0595 DD 5E 04        ld e,(ix+4)
+1449   0598 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+1450   059B CD 34 04        call compare
+1451   059E 38 21           jr c, div_reg2_by_reg1_4b
+1452   05A0             
+1453   05A0             ;                shl_reg(regmdiv, 1);
+1454   05A0 01 01 00        ld bc,1
+1455   05A3 DD 5E 04        ld e,(ix+4)
+1456   05A6 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+1457   05A9 CD 34 01        call shl_reg
+1458   05AC             
+1459   05AC             ;                if (compare(reg2, regmdiv) < 0){ //reg2 < regmdiv
+1460   05AC             ;                    break;
+1461   05AC             ;                }
+1462   05AC DD 6E 02        ld l,(ix+2)
+1463   05AF DD 66 03        ld h,(ix+3)         ; IX+2, IX+3: reg2
+1464   05B2 DD 5E 04        ld e,(ix+4)
+1465   05B5 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+1466   05B8 CD 34 04        call compare
+1467   05BB 38 04           jr c, div_reg2_by_reg1_4b
+1468   05BD             
+1469   05BD             ;                order++;
+1470   05BD FD 23           inc iy
+1471   05BF             
+1472   05BF             ;            }
+1473   05BF 18 CE           jr div_reg2_by_reg1_4a
+1474   05C1             
+1475   05C1             div_reg2_by_reg1_4b:
+1476   05C1             
+1477   05C1             ;            memcpy(regmdiv, regmdiv2, NBYTES);
+1478   05C1 DD 5E 04        ld e,(ix+4)
+1479   05C4 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+1480   05C7 DD 6E 06        ld l,(ix+6)
+1481   05CA DD 66 07        ld h,(ix+7)         ; IX+6, IX+7: regmdiv2
+1482   05CD 01 07 00        ld bc,NBYTES
+1483   05D0 ED B0           ldir
+1484   05D2             
+1485   05D2             ;            shl_reg(regmdiv, order);
+1486   05D2 FD              .db 0fdh
+1487   05D3 4D              ld c,l
+1488   05D4 FD              .db 0fdh
+1489   05D5 44              ld b,h
+1490   05D6 DD 5E 04        ld e,(ix+4)
+1491   05D9 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+1492   05DC CD 34 01        call shl_reg
+1493   05DF             
+1494   05DF             ;            sub_reg2_from_reg1(reg2, regmdiv);
+1495   05DF DD 5E 02        ld e,(ix+2)
+1496   05E2 DD 56 03        ld d,(ix+3)         ; IX+2, IX+3: reg2
+1497   05E5 DD 6E 04        ld l,(ix+4)
+1498   05E8 DD 66 05        ld h,(ix+5)         ; IX+4, IX+5: regmdiv
+1499   05EB CD 0F 01        call sub_reg2_from_reg1
+1500   05EE             
+1501   05EE             ;            set_bit_reg_int(regquot, order);
+1502   05EE DD 6E 08        ld l,(ix+8)
+1503   05F1 DD 66 09        ld h,(ix+9)         ; IX+8, IX+9: regquot
+1504   05F4 FD              .db 0fdh
+1505   05F5 4D              ld c,l
+1506   05F6 FD              .db 0fdh
+1507   05F7 44              ld b,h
+1508   05F8 CD B7 00        call set_bit_reg_int
+1509   05FB             
+1510   05FB             ;            memcpy(regmdiv, regmdiv2, NBYTES);
+1511   05FB DD 5E 04        ld e,(ix+4)
+1512   05FE DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regmdiv
+1513   0601 DD 6E 06        ld l,(ix+6)
+1514   0604 DD 66 07        ld h,(ix+7)         ; IX+6, IX+7: regmdiv2
+1515   0607 01 07 00        ld bc,NBYTES
+1516   060A ED B0           ldir
+1517   060C             
+1518   060C             ;        }
+1519   060C             ;    }
+1520   060C C3 EF 04        jp div_reg2_by_reg1_3
+1521   060F             
+1522   060F             div_reg2_by_reg1_5:
+1523   060F             
+1524   060F             ;    memcpy(reg2, regquot, NBYTES);
+1525   060F DD 5E 02        ld e,(ix+2)
+1526   0612 DD 56 03        ld d,(ix+3)         ; IX+2, IX+3: reg2
+1527   0615 DD 6E 08        ld l,(ix+8)
+1528   0618 DD 66 09        ld h,(ix+9)         ; IX+8, IX+9: regquot
+1529   061B 01 07 00        ld bc,NBYTES
+1530   061E ED B0           ldir
+1531   0620             
+1532   0620             ;    return 0;
+1533   0620 AF              xor a
+1534   0621             
+1535   0621             div_reg2_by_reg1_end:
+1536   0621             
+1537   0621 21 5B 00        ld hl,000Ah+3*NBYTES    ; Frees 10 bytes + 3 buffers
+1538   0624 39              add hl,sp
+1539   0625 F9              ld sp,hl
+1540   0626 DD E1           pop ix
+1541   0628 B7              or a
+1542   0629 C9              ret
+1543   062A             
+1544   062A             ;///////////////////////////////////////////////////////////////////////////////
+1545   062A             ;   div_acc_by_reg
+1546   062A             ;   int div_acc_by_reg(const uint8_t *reg)
+1547   062A             ;   Parameters:
+1548   062A             ;     HL: reg
+1549   062A             ;   Returns: Flags: Z:        Div OK
+1550   062A             ;                   NZ:       Div Error
+1551   062A             ;   Affects: BC DE HL AF IY BC' DE' HL' AF'
+1552   062A             div_acc_by_reg:
+1553   062A             
+1554   062A                 ;return div_reg2_by_reg1(reg, acc);
+1555   062A 11 00 20        ld de,acc
+1556   062D C3 52 04        jp div_reg2_by_reg1
+1557   0630             
+1558   0630             ;///////////////////////////////////////////////////////////////////////////////
+1559   0630             ;   print_int_part
+1560   0630             ;   void print_int_part(const uint8_t *reg);
+1561   0630             ;   Parameters:
+1562   0630             ;     HL: reg
+1563   0630             ;   Returns: Nothing
+1564   0630             ;   Affects: BC DE HL AF
+1565   0630             print_int_part_digit:
+1566   0630             
+1567   0630 1E 00           ld e,0
+1568   0632 AF              xor a
+1569   0633             
+1570   0633             print_int_part_digit_0:
+1571   0633             
+1572   0633 ED 42           sbc hl,bc
+1573   0635 28 08           jr z,print_int_part_digit_2b
+1574   0637 38 03           jr c,print_int_part_digit_2a
+1575   0639 1C              inc e
+1576   063A 18 F7           jr print_int_part_digit_0
+1577   063C             
+1578   063C             print_int_part_digit_2a:
+1579   063C 09              add hl,bc
+1580   063D 18 01           jr print_int_part_digit_2
+1581   063F             
+1582   063F             print_int_part_digit_2b:
+1583   063F 1C              inc e
+1584   0640             
+1585   0640             print_int_part_digit_2:
+1586   0640             
+1587   0640 7B              ld a,e
+1588   0641 B7              or a
+1589   0642 20 03           jr nz,print_int_part_digit_3
+1590   0644             
+1591   0644 CB 42           bit 0,d
+1592   0646 C8              ret z
+1593   0647             
+1594   0647             print_int_part_digit_3:
+1595   0647             
+1596   0647 16 01           ld d,1
+1597   0649 C6 30           add a,'0'
+1598   064B CF              rst 08h
+1599   064C C9              ret
+1600   064D             
+1601   064D             print_int_part:
+1602   064D             
+1603   064D 46              ld b,(hl)
+1604   064E 23              inc hl
+1605   064F 4E              ld c,(hl)
+1606   0650 69              ld l,c
+1607   0651 60              ld h,b
+1608   0652             
+1609   0652 16 00           ld d,0
+1610   0654 01 10 27        ld bc,10000
+1611   0657 CD 30 06        call print_int_part_digit
+1612   065A 01 E8 03        ld bc,1000
+1613   065D CD 30 06        call print_int_part_digit
+1614   0660 01 64 00        ld bc,100
+1615   0663 CD 30 06        call print_int_part_digit
+1616   0666 01 0A 00        ld bc,10
+1617   0669 CD 30 06        call print_int_part_digit
+1618   066C                 ;ld bc,1
+1619   066C                 ;call print_int_part_digit
+1620   066C 7D              ld a,l
+1621   066D C6 30           add a,'0'
+1622   066F CF              rst 08h
+1623   0670 C9              ret
+1624   0671             
+1625   0671             ;///////////////////////////////////////////////////////////////////////////////
+1626   0671             ;   print_bc
+1627   0671             ;   Internal function for debugging
+1628   0671             ;   Parameters:
+1629   0671             ;     BC: value to print
+1630   0671             ;   Returns: Nothing
+1631   0671             ;   Affects: BC DE HL AF
+1632   0671             print_bc:
+1633   0671             
+1634   0671 69              ld l,c
+1635   0672 60              ld h,b
+1636   0673             
+1637   0673 16 00           ld d,0
+1638   0675 01 10 27        ld bc,10000
+1639   0678 CD 30 06        call print_int_part_digit
+1640   067B 01 E8 03        ld bc,1000
+1641   067E CD 30 06        call print_int_part_digit
+1642   0681 01 64 00        ld bc,100
+1643   0684 CD 30 06        call print_int_part_digit
+1644   0687 01 0A 00        ld bc,10
+1645   068A CD 30 06        call print_int_part_digit
+1646   068D 7D              ld a,l
+1647   068E C6 30           add a,'0'
+1648   0690 CF              rst 08h
+1649   0691 C9              ret
+1650   0692             
+1651   0692             ;///////////////////////////////////////////////////////////////////////////////
+1652   0692             ;   print_reg_decimal
+1653   0692             ;   void print_reg_decimal(const uint8_t *reg, int nplaces);
+1654   0692             ;   Parameters:
+1655   0692             ;     HL: reg
+1656   0692             ;     BC: nplaces
+1657   0692             ;   Returns: Nothing
+1658   0692             ;   Affects: BC DE HL AF
+1659   0692             print_reg_decimal:
+1660   0692             
+1661   0692 DD E5           push ix
+1662   0694 DD 21 F1 FF     ld ix,0FFF8h-NBYTES    ; Allocates 8 bytes + buffer
+1663   0698 DD 39           add ix,sp
+1664   069A DD F9           ld sp,ix
+1665   069C DD 75 00        ld (ix+0),l
+1666   069F DD 74 01        ld (ix+1),h         ; IX+0, IX+1: reg
+1667   06A2             
+1668   06A2                 ;uint8_t regtmp[NBYTES];
+1669   06A2 DD              .db 0ddh
+1670   06A3 5D              ld e,l
+1671   06A4 DD              .db 0ddh
+1672   06A5 54              ld d,h            ; Copia IX em DE
+1673   06A6 21 08 00        ld HL,8
+1674   06A9 19              add hl,de
+1675   06AA DD 75 02        ld (ix+2),l
+1676   06AD DD 74 03        ld (ix+3),h         ; IX+2, IX+3: regtmp
+1677   06B0             
+1678   06B0             ;    print_int_part(reg);
+1679   06B0             ;    printf(".");
+1680   06B0 DD 6E 00        ld l,(ix+0)
+1681   06B3 DD 66 01        ld h,(ix+1)         ; IX+0, IX+1: reg
+1682   06B6 E5              push hl
+1683   06B7 C5              push bc
+1684   06B8 CD 4D 06        call print_int_part
+1685   06BB C1              pop bc
+1686   06BC 3E 2E           ld a,'.'
+1687   06BE CF              rst 08h
+1688   06BF E1              pop hl
+1689   06C0             
+1690   06C0             ;    memcpy(regtmp, reg, NBYTES);
+1691   06C0 C5              push bc
+1692   06C1             
+1693   06C1 DD 5E 02        ld e,(ix+2)
+1694   06C4 DD 56 03        ld d,(ix+3)         ; IX+2, IX+3: regtmp
+1695   06C7 01 07 00        ld bc,NBYTES
+1696   06CA ED B0           ldir
+1697   06CC             
+1698   06CC C1              pop bc
+1699   06CD             
+1700   06CD DD 6E 02        ld l,(ix+2)
+1701   06D0 DD 66 03        ld h,(ix+3)         ; IX+2, IX+3: regtmp
+1702   06D3             
+1703   06D3             ;    if (nplaces)
+1704   06D3             ;        ++nplaces;
+1705   06D3 78              ld a,b
+1706   06D4 B1              or c
+1707   06D5 28 01           jr z, print_reg_decimal_1
+1708   06D7 03              inc bc
+1709   06D8             
+1710   06D8             print_reg_decimal_1:
+1711   06D8             
+1712   06D8             ;    for (;;){
+1713   06D8             ;        if (nplaces){
+1714   06D8 78              ld a,b
+1715   06D9 B1              or c
+1716   06DA 28 05           jr z, print_reg_decimal_2
+1717   06DC             
+1718   06DC             ;            --nplaces;
+1719   06DC 0B              dec bc
+1720   06DD             ;            if (!nplaces)
+1721   06DD             ;                break;
+1722   06DD 78              ld a,b
+1723   06DE B1              or c
+1724   06DF 28 1F           jr z, print_reg_decimal_3
+1725   06E1             ;        }
+1726   06E1             
+1727   06E1             print_reg_decimal_2:
+1728   06E1             
+1729   06E1             ;        memset(regtmp,0,NBYTES_INT);
+1730   06E1 AF              xor a
+1731   06E2 77              ld (hl),a
+1732   06E3 23              inc hl
+1733   06E4 77              ld (hl),a
+1734   06E5 2B              dec hl
+1735   06E6             
+1736   06E6             ;        if (iszero(regtmp)) break;
+1737   06E6 C5              push bc
+1738   06E7 E5              push hl
+1739   06E8 CD 46 04        call iszero
+1740   06EB E1              pop hl
+1741   06EC C1              pop bc
+1742   06ED 28 11           jr z, print_reg_decimal_3
+1743   06EF             
+1744   06EF             ;        mul_reg_10(regtmp);
+1745   06EF C5              push bc
+1746   06F0 E5              push hl
+1747   06F1 5D              ld e,l
+1748   06F2 54              ld d,h
+1749   06F3 CD D6 03        call mul_reg_10
+1750   06F6 E1              pop hl
+1751   06F7 C1              pop bc
+1752   06F8             
+1753   06F8             ;        print_int_part(regtmp);
+1754   06F8 23              inc hl
+1755   06F9 7E              ld a,(hl)
+1756   06FA 2B              dec hl
+1757   06FB C6 30           add a,'0'
+1758   06FD CF              rst 08h
+1759   06FE             
+1760   06FE             ;    }
+1761   06FE 18 D8           jr print_reg_decimal_1
+1762   0700             
+1763   0700             print_reg_decimal_3:
+1764   0700             print_reg_decimal_end:
+1765   0700             
+1766   0700 21 0F 00        ld hl,0008h+NBYTES    ; Frees 8 bytes + buffer
+1767   0703 39              add hl,sp
+1768   0704 F9              ld sp,hl
+1769   0705 DD E1           pop ix
+1770   0707 C9              ret
+1771   0708             
+1772   0708             ;///////////////////////////////////////////////////////////////////////////////
+1773   0708             ;   println_reg_decimal
+1774   0708             ;   void println_reg_decimal(const uint8_t *reg, int nplaces);
+1775   0708             ;   Parameters:
+1776   0708             ;     HL: reg
+1777   0708             ;     BC: nplaces
+1778   0708             ;   Returns: Nothing
+1779   0708             ;   Affects: BC DE HL AF
+1780   0708             println_reg_decimal:
+1781   0708             
+1782   0708 CD 92 06        call print_reg_decimal
+1783   070B CD 7B 00        call print_crlf
+1784   070E C9              ret
+1785   070F             
+1786   070F             ;///////////////////////////////////////////////////////////////////////////////
+1787   070F             ;   test_pi_bbp
+1788   070F             ;   void test_pi_bbp(void); // Bailey-Borwein-Plouffe
+1789   070F             ;   Parameters: Nothing
+1790   070F             ;   Returns: Nothing
+1791   070F             ;   Affects: BC DE HL AF
+1792   070F             test_pi_bbp:
+1793   070F             
+1794   070F DD E5           push ix
+picalc.asm line 1795: Unused data in MS byte of argument. (6)
+1795   0711 DD 21 A5 FF     ld ix,0FFF6h-3*NBYTES    ; Allocates 10 bytes + 3 buffers
+1796   0715 DD 39           add ix,sp
+1797   0717 DD F9           ld sp,ix
+1798   0719             
+1799   0719             ;    uint8_t regtotal[NBYTES];
+1800   0719 DD              .db 0ddh
+1801   071A 4D              ld c,l
+1802   071B DD              .db 0ddh
+1803   071C 44              ld b,h            ; IX -> BC
+1804   071D 21 0A 00        ld HL,10
+1805   0720 09              add hl,bc
+1806   0721 DD 75 00        ld (ix+0),l
+1807   0724 DD 74 01        ld (ix+1),h         ; IX+0, IX+1: regtotal
+1808   0727             
+1809   0727             ;    uint8_t regsubtotal[NBYTES];
+1810   0727 01 07 00        ld bc,NBYTES
+1811   072A 09              add hl,bc
+1812   072B DD 75 02        ld (ix+2),l
+1813   072E DD 74 03        ld (ix+3),h         ; IX+2, IX+3: regsubtotal
+1814   0731             
+1815   0731             ;    uint8_t regden[NBYTES];
+1816   0731                 ;ld bc,NBYTES
+1817   0731 09              add hl,bc
+1818   0732 DD 75 04        ld (ix+4),l
+1819   0735 DD 74 05        ld (ix+5),h         ; IX+4, IX+5: regden
+1820   0738             
+1821   0738             ;    zero_reg(regtotal);
+1822   0738 DD 6E 00        ld l,(ix+0)
+1823   073B DD 66 01        ld h,(ix+1)         ; IX+0, IX+1: regtotal
+1824   073E CD 82 00        call zero_reg
+1825   0741             
+1826   0741             ;    for (int k = 0; k < 10000; k++){
+1827   0741 01 00 00        ld bc,0
+1828   0744             
+1829   0744             test_pi_bbp_1:
+1830   0744             
+1831   0744 DD 71 06        ld (ix+6),c
+1832   0747 DD 70 07        ld (ix+7),b         ; IX+6, IX+7: k
+1833   074A             
+1834   074A 78              ld a,b
+1835   074B FE 00           cp NUM_IT >> 8
+1836   074D 38 08           jr c, test_pi_bbp_1a
+1837   074F             
+1838   074F 79              ld a,c
+1839   0750 FE 09           cp NUM_IT & 0ffh
+1840   0752 38 03           jr c, test_pi_bbp_1a
+1841   0754             
+1842   0754 C3 67 08        jp test_pi_bbp_2
+1843   0757             
+1844   0757             test_pi_bbp_1a:
+1845   0757             
+1846   0757             ;        zero_reg(regsubtotal);
+1847   0757 DD 6E 02        ld l,(ix+2)
+1848   075A DD 66 03        ld h,(ix+3)         ; IX+2, IX+3: regsubtotal
+1849   075D CD 82 00        call zero_reg
+1850   0760             
+1851   0760             ;        zero_reg(regden);
+1852   0760 DD 6E 04        ld l,(ix+4)
+1853   0763 DD 66 05        ld h,(ix+5)         ; IX+4, IX+5: regden
+1854   0766 E5              push hl
+1855   0767 CD 82 00        call zero_reg
+1856   076A D1              pop de              ; DE has regden
+1857   076B             
+1858   076B             ;        load_reg_int(regden,8*k+1);     // Sets 8k+1
+1859   076B DD 6E 06        ld l,(ix+6)
+1860   076E DD 66 07        ld h,(ix+7)         ; IX+6, IX+7: k
+1861   0771 CB 25           sla l
+1862   0773 CB 14           rl h
+1863   0775 CB 25           sla l
+1864   0777 CB 14           rl h
+1865   0779 CB 25           sla l
+1866   077B CB 14           rl h
+1867   077D 23              inc hl
+1868   077E CD F6 00        call load_reg_int   ; DE is correct here
+1869   0781             
+1870   0781             ;        zero_reg(acc);
+1871   0781 21 00 20        ld hl,acc
+1872   0784 CD 82 00        call zero_reg
+1873   0787             
+1874   0787             ;        set_bit_reg_int(acc, 2);        // Sets with 4
+1875   0787 21 00 20        ld hl,acc
+1876   078A 01 02 00        ld bc,2
+1877   078D CD B7 00        call set_bit_reg_int
+1878   0790             
+1879   0790             ;        div_acc_by_reg(regden);
+1880   0790 DD 6E 04        ld l,(ix+4)
+1881   0793 DD 66 05        ld h,(ix+5)         ; IX+4, IX+5: regden
+1882   0796 CD 2A 06        call div_acc_by_reg
+1883   0799             
+1884   0799             ;        add_reg2_to_reg1(regsubtotal,acc);
+1885   0799 DD 5E 02        ld e,(ix+2)
+1886   079C DD 56 03        ld d,(ix+3)         ; IX+2, IX+3: regsubtotal
+1887   079F 21 00 20        ld hl,acc
+1888   07A2 CD BD 00        call add_reg2_to_reg1
+1889   07A5             
+1890   07A5             ;        inc_reg_int8(regden, 3);        // 8k+4
+1891   07A5 DD 5E 04        ld e,(ix+4)
+1892   07A8 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regden
+1893   07AB 3E 03           ld a,3
+1894   07AD CD E0 00        call inc_reg_int8
+1895   07B0             
+1896   07B0             ;        zero_reg(acc);
+1897   07B0 21 00 20        ld hl,acc
+1898   07B3 CD 82 00        call zero_reg
+1899   07B6             
+1900   07B6             ;        set_bit_reg_int(acc, 1);        // Sets with 2
+1901   07B6 21 00 20        ld hl,acc
+1902   07B9 01 01 00        ld bc,1
+1903   07BC CD B7 00        call set_bit_reg_int
+1904   07BF             
+1905   07BF             ;        div_acc_by_reg(regden);
+1906   07BF DD 6E 04        ld l,(ix+4)
+1907   07C2 DD 66 05        ld h,(ix+5)         ; IX+4, IX+5: regden
+1908   07C5 CD 2A 06        call div_acc_by_reg
+1909   07C8             
+1910   07C8             ;        sub_reg2_from_reg1(regsubtotal,acc);
+1911   07C8 21 00 20        ld hl,acc
+1912   07CB DD 5E 02        ld e,(ix+2)
+1913   07CE DD 56 03        ld d,(ix+3)         ; IX+2, IX+3: regsubtotal
+1914   07D1 CD 0F 01        call sub_reg2_from_reg1
+1915   07D4             
+1916   07D4             ;        inc_reg_int8(regden, 1);        // 8k+5
+1917   07D4 DD 5E 04        ld e,(ix+4)
+1918   07D7 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regden
+1919   07DA 3E 01           ld a,1
+1920   07DC CD E0 00        call inc_reg_int8
+1921   07DF             
+1922   07DF             ;        zero_reg(acc);
+1923   07DF 21 00 20        ld hl,acc
+1924   07E2 CD 82 00        call zero_reg
+1925   07E5             
+1926   07E5             ;        set_bit_reg_int(acc, 0);        // Sets with 1
+1927   07E5 21 00 20        ld hl,acc
+1928   07E8 01 00 00        ld bc,0
+1929   07EB CD B7 00        call set_bit_reg_int
+1930   07EE             
+1931   07EE             ;        div_acc_by_reg(regden);
+1932   07EE DD 6E 04        ld l,(ix+4)
+1933   07F1 DD 66 05        ld h,(ix+5)         ; IX+4, IX+5: regden
+1934   07F4 CD 2A 06        call div_acc_by_reg
+1935   07F7             
+1936   07F7             ;        sub_reg2_from_reg1(regsubtotal,acc);
+1937   07F7 21 00 20        ld hl,acc
+1938   07FA DD 5E 02        ld e,(ix+2)
+1939   07FD DD 56 03        ld d,(ix+3)         ; IX+2, IX+3: regsubtotal
+1940   0800 CD 0F 01        call sub_reg2_from_reg1
+1941   0803             
+1942   0803             ;        inc_reg_int8(regden, 1);        // 8k+6
+1943   0803 DD 5E 04        ld e,(ix+4)
+1944   0806 DD 56 05        ld d,(ix+5)         ; IX+4, IX+5: regden
+1945   0809 3E 01           ld a,1
+1946   080B CD E0 00        call inc_reg_int8
+1947   080E             
+1948   080E             ;        zero_reg(acc);
+1949   080E 21 00 20        ld hl,acc
+1950   0811 CD 82 00        call zero_reg
+1951   0814             
+1952   0814             ;        set_bit_reg_int(acc, 0);        // Sets with 1
+1953   0814 21 00 20        ld hl,acc
+1954   0817 01 00 00        ld bc,0
+1955   081A CD B7 00        call set_bit_reg_int
+1956   081D             
+1957   081D             ;        div_acc_by_reg(regden);
+1958   081D DD 6E 04        ld l,(ix+4)
+1959   0820 DD 66 05        ld h,(ix+5)         ; IX+4, IX+5: regden
+1960   0823 CD 2A 06        call div_acc_by_reg
+1961   0826             
+1962   0826             ;        sub_reg2_from_reg1(regsubtotal,acc);
+1963   0826 21 00 20        ld hl,acc
+1964   0829 DD 5E 02        ld e,(ix+2)
+1965   082C DD 56 03        ld d,(ix+3)         ; IX+2, IX+3: regsubtotal
+1966   082F CD 0F 01        call sub_reg2_from_reg1
+1967   0832             
+1968   0832             ;        shr_reg(regsubtotal, 4*k);
+1969   0832 DD 5E 02        ld e,(ix+2)
+1970   0835 DD 56 03        ld d,(ix+3)         ; IX+2, IX+3: regsubtotal
+1971   0838 DD 4E 06        ld c,(ix+6)
+1972   083B DD 46 07        ld b,(ix+7)         ; IX+6, IX+7: k
+1973   083E CB 21           sla c
+1974   0840 CB 10           rl b
+1975   0842 CB 21           sla c
+1976   0844 CB 10           rl b
+1977   0846 CD F0 01        call shr_reg
+1978   0849             
+1979   0849             ;        add_reg2_to_reg1(regtotal, regsubtotal);
+1980   0849 DD 5E 00        ld e,(ix+0)
+1981   084C DD 56 01        ld d,(ix+1)         ; IX+0, IX+1: regtotal
+1982   084F DD 6E 02        ld l,(ix+2)
+1983   0852 DD 66 03        ld h,(ix+3)         ; IX+2, IX+3: regsubtotal
+1984   0855 CD BD 00        call add_reg2_to_reg1
+1985   0858             
+1986   0858             ;;        if (!(k % 10)){
+1987   0858             ;;            printf("%5d: ",k);
+1988   0858             ;;            print_reg_decimal(regtotal, 120);
+1989   0858             ;;            int places_ok = compare_digits_to_pi(regtotal);
+1990   0858             ;;            printf(" (%d)\n",places_ok);
+1991   0858             ;;            if (places_ok >= 1000) return;
+1992   0858             ;;        }
+1993   0858             ;            print_reg_decimal(regtotal, 120);
+1994   0858 CD 6F 00        call prints
+1995   085B 2A 00           .db "*",0
+1996   085D                 ;ld l,(ix+0)
+1997   085D                 ;ld h,(ix+1)         ; IX+0, IX+1: regtotal
+1998   085D                 ;ld bc,NUM_DECS
+1999   085D                 ;call println_reg_decimal
+2000   085D             
+2001   085D             ;    }
+2002   085D DD 4E 06        ld c,(ix+6)
+2003   0860 DD 46 07        ld b,(ix+7)         ; IX+6, IX+7: k
+2004   0863 03              inc bc
+2005   0864                 ;ld (ix+6),c
+2006   0864                 ;ld (ix+7),b         ; IX+6, IX+7: k
+2007   0864             
+2008   0864 C3 44 07        jp test_pi_bbp_1
+2009   0867             
+2010   0867             test_pi_bbp_2:
+2011   0867             test_pi_bbp_end:
+2012   0867             
+2013   0867 CD 5E 09        call lcd_clear
+2014   086A CD 6F 00        call prints
+2015   086D 50 49 3A 00     .db "PI:",0
+2016   0871 DD 6E 00        ld l,(ix+0)
+2017   0874 DD 66 01        ld h,(ix+1)         ; IX+0, IX+1: regtotal
+2018   0877 01 0B 00        ld bc,NUM_DECS
+2019   087A                 ;call println_reg_decimal
+2020   087A CD 92 06        call print_reg_decimal
+2021   087D             
+2022   087D 21 5B 00        ld hl,000Ah+3*NBYTES    ; Frees 10 bytes + 3 buffers
+2023   0880 39              add hl,sp
+2024   0881 F9              ld sp,hl
+2025   0882 DD E1           pop ix
+2026   0884 C9              ret
+2027   0885             
+2028   0885             ;///////////////////////////////////////////////////////////////////////////////
+2029   0885             ;   _main
+2030   0885             ;   void _main(void);
+2031   0885             ;   Parameters: Nothing
+2032   0885             ;   Returns: Nothing
+2033   0885             ;   Affects: BC DE HL AF IY BC' DE' HL' AF'
+2034   0885             _main:
+2035   0885             
+2036   0885 CD B6 08        call lcd_begin    ;inicializa LCD no modo 4 bits		
+2037   0888 16 02           ld d,2            ;carrega 2d em d 
+2038   088A CD 8B 09        call dx100ms      ;aguarda 500ms 				
+2039   088D 06 0C           ld b,0Ch          ;desliga cursor e blink 
+2040   088F CD F7 08        call lcd_cmd      ;envia comando 
+2041   0892 CD 67 09        call msg_init     ;escreve título "Alpha Z80" 
+2042   0895             
+2043   0895 CD 0F 07        call test_pi_bbp
+2044   0898 C9              ret
+2045   0899             
+2046   0899             ; =============================================================================
+2047   0899             lcd_home:
+2048   0899 C5              push bc
+2049   089A 06 02           ld b,02h          ;return home
+2050   089C CD F7 08        call lcd_cmd      ;envia 02h para o LCD
+2051   089F F5              push af
+2052   08A0 AF              xor a
+2053   08A1 32 07 20        ld (dispcol),a
+2054   08A4 F1              pop af
+2055   08A5 C1              pop bc
+2056   08A6 C9              ret
+2057   08A7             
+2058   08A7             ; =============================================================================
+2059   08A7             lcd_home2:
+2060   08A7 C5              push bc
+2061   08A8 06 C0           ld b,0C0h         ;posiciona cursor na linha 1, coluna 0
+2062   08AA CD F7 08        call lcd_cmd      ;envia comando
+2063   08AD F5              push af
+2064   08AE 3E 10           ld a,16
+2065   08B0 32 07 20        ld (dispcol),a
+2066   08B3 F1              pop af
+2067   08B4 C1              pop bc
+2068   08B5 C9              ret
+2069   08B6             
+2070   08B6             ; =============================================================================
+2071   08B6             ; --- Inicializa LCD modo de 4 bits ---
+2072   08B6             lcd_begin:
+2073   08B6 16 32           ld d,50           ;carrega 50d em d 
+2074   08B8 CD 79 09        call dx1ms        ;tempo para estabilização (50ms)
+2075   08BB 06 30           ld b,30h          ;protocolo de inicialização
+2076   08BD 0E 00           ld c,00h          ;envio de comando
+2077   08BF CD 26 09        call send_nibble  ;envia 30h para o LCD
+2078   08C2 16 05           ld d,5            ;carrega 5d em d 
+2079   08C4 CD 79 09        call dx1ms        ;aguarda 5ms (tempo superior ao datasheet)
+2080   08C7 06 30           ld b,30h          ;protocolo de inicialização
+2081   08C9 0E 00           ld c,00h          ;envio de comando
+2082   08CB CD 26 09        call send_nibble  ;envia 30h para o LCD		
+2083   08CE CD 81 09        call d1ms         ;aguarda 1ms (tempo superior ao datasheet)
+2084   08D1 06 30           ld b,30h          ;protocolo de inicialização
+2085   08D3 0E 00           ld c,00h          ;envio de comando
+2086   08D5 CD 26 09        call send_nibble  ;envia 30h para o LCD
+2087   08D8 06 20           ld b,20h          ;LCD no modo 4 bits
+2088   08DA 0E 00           ld c,00h          ;envio de comando
+2089   08DC CD 26 09        call send_nibble  ;envia 30h para o LCD
+2090   08DF 06 28           ld b,28h          ;5x8 pontos por caractere, duas linhas
+2091   08E1 CD F7 08        call lcd_cmd      ;envia comando 28h
+2092   08E4 06 0F           ld b,0Fh          ;liga display, cursor e blink
+2093   08E6 CD F7 08        call lcd_cmd      ;envia comando 0Fh
+2094   08E9 06 01           ld b,01h          ;limpa LCD
+2095   08EB CD F7 08        call lcd_cmd      ;envia comando 01h
+2096   08EE 06 06           ld b,06h          ;modo de incremento de endereço para direita, movendo apenas o cursor 
+2097   08F0 CD F7 08        call lcd_cmd      ;envia comando 06h
+2098   08F3 CD 5E 09        call lcd_clear    ;limpa o display
+2099   08F6 C9              ret               ;retorno da sub-rotina
+2100   08F7             
+2101   08F7             ; =============================================================================
+2102   08F7             ; --- Envia Comandos / Escreve no LCD ---
+2103   08F7             lcd_cmd:
+2104   08F7 0E 00           ld c,00h
+2105   08F9 18 1C           jr send_byte
+2106   08FB             lcd_write:
+2107   08FB             
+2108   08FB 3A 07 20        ld a,(dispcol)
+2109   08FE FE 10           cp 16
+2110   0900 20 05           jr nz,lcd_w1
+2111   0902 CD A7 08        call lcd_home2
+2112   0905 18 07           jr lcd_w2
+2113   0907             lcd_w1:
+2114   0907 FE 20           cp 32
+2115   0909 20 03           jr nz,lcd_w2
+2116   090B CD 99 08        call lcd_home
+2117   090E             lcd_w2:
+2118   090E 3A 07 20        ld a,(dispcol)
+2119   0911 3C              inc a
+2120   0912 32 07 20        ld (dispcol),a
+2121   0915 0E 01           ld c,01h          ;01h para envio de caracteres
+2122   0917             send_byte:		
+2123   0917 CD 26 09        call send_nibble  ;envia nibble mais significativo
+2124   091A 78              ld a,b            ;carrega conteúdo de b em acc
+2125   091B 17              rla               ;rotaciona acc para esquerda 4x
+2126   091C 17              rla               ;
+2127   091D 17              rla               ;
+2128   091E 17              rla               ;
+2129   091F E6 F0           and 0F0h          ;máscara para preservar nibble mais significativo
+2130   0921 47              ld b,a            ;atualiza b
+2131   0922 CD 26 09        call send_nibble  ;envia nibble menos significativo
+2132   0925 C9              ret						;retorno da sub-rotina
+2133   0926             
+2134   0926             ;==============================================================================
+2135   0926             ; --- Envia cada nibble separadamente e gera pulso de enable ---
+2136   0926             send_nibble:
+2137   0926 3E 00           ld a,00h          ;zera conteúdo de ACC
+2138   0928 CB 41           bit 0,c           ;bit 0 de c em LOW?
+2139   092A CA 2F 09        jp z,rs_clr       ;sim, desvia para manter RS limpo
+2140   092D 3E 01           ld a,00h|RS       ;não, seta bit RS
+2141   092F             rs_clr:
+2142   092F CB 78           bit 7,b           ;bit7 de B em LOW?
+2143   0931 CA 36 09        jp z,b6aval       ;sim, desvia para avaliar bit6
+2144   0934 CB FF           set 7,a           ;não, seta bit 7 de acc
+2145   0936             b6aval:
+2146   0936 CB 70           bit 6,b           ;bit6 de B em LOW?
+2147   0938 CA 3D 09        jp z,b5aval       ;sim, desvia para avaliar bit5
+2148   093B CB F7           set 6,a           ;não, seta bit 6 de acc
+2149   093D             b5aval:
+2150   093D CB 68           bit 5,b           ;bit5 de B em LOW?
+2151   093F CA 44 09        jp z,b4aval       ;sim, desvia para avaliar bit4
+2152   0942 CB EF           set 5,a           ;não, seta bit 5 de acc
+2153   0944             b4aval:
+2154   0944 CB 60           bit 4,b           ;bit4 de B em LOW?
+2155   0946 CA 4B 09        jp z,lcd_en       ;sim, desvia para pulso de enable
+2156   0949 CB E7           set 4,a           ;não, set bit 4 de acc
+2157   094B             lcd_en:
+2158   094B CB CF           set EN,a          ;pino enable em HIGH
+2159   094D D3 04           out (PORTB),a     ;escreve no PORTB 
+2160   094F 16 02           ld d,2            ;carrega 2d em d 
+2161   0951 CD 79 09        call dx1ms        ;aguarda 2ms 
+2162   0954 CB 8F           res EN,a          ;pino enable em LOW 
+2163   0956 D3 04           out (PORTB),a     ;escreve no PORTB 
+2164   0958 16 02           ld d,2            ;carrega 2d em d
+2165   095A CD 79 09        call dx1ms        ;aguarda 2ms 		
+2166   095D C9              ret               ;retorno da sub-rotina
+2167   095E             
+2168   095E             ; =============================================================================
+2169   095E             ; --- Limpa LCD ---
+2170   095E             lcd_clear:
+2171   095E                 ;ld b,02h          ;return home
+2172   095E                 ;call lcd_cmd      ;envia 02h para o LCD
+2173   095E CD 99 08        call lcd_home
+2174   0961 06 01           ld b,01h          ;limpa o display
+2175   0963 CD F7 08        call lcd_cmd      ;envia 01h para o LCD
+2176   0966 C9              ret               ;retorno da sub-rotina		
+2177   0967             
+2178   0967             ; =============================================================================
+2179   0967             ; --- Imprime o título na segunda linha do LCD ---
+2180   0967             msg_init:
+2181   0967                 ;ld b,0C0h         ;posiciona cursor na linha 1, coluna 0
+2182   0967                 ;call lcd_cmd      ;envia comando
+2183   0967 CD A7 08        call lcd_home2
+2184   096A CD 6F 00        call prints
+2185   096D 504943414C43    .db "PICALC 1.0",0
+2185   0973 20312E3000
+2186   0978 C9              ret               ;retorna da sub-rotina 
+2187   0979             
+2188   0979             ; =============================================================================
+2189   0979             ; --- dx1ms multiplies 1ms delay ---	
+2190   0979             dx1ms:				
+2191   0979 CD 81 09        call d1ms         ; 1ms (delay time)
+2192   097C 15              dec d             ; 1.0µs    4 T States 
+2193   097D C2 79 09        jp nz,dx1ms       ; 2.5µs   10 T States 		
+2194   0980 C9              ret               ; 2.5µs   10 T States 
+2195   0981             
+2196   0981             ; =============================================================================
+2197   0981             ; --- aprox. 1ms delay (clock 4MHz) ---
+2198   0981             d1ms:                 ; 4.25µs  17 T States (call)
+2199   0981 C5              push bc           ; 2.75µs  11 T States 
+2200   0982 06 DB           ld b,0DBh         ; 1.75 µs  7 T States 
+2201   0984             dloop:
+2202   0984 05              dec b             ; 1.0µs    4 T States 
+2203   0985 00              nop               ; 1.0µs    4 T States 
+2204   0986 C2 84 09        jp nz,dloop       ; 2.5µs   10 T States 								
+2205   0989 C1              pop bc            ; 2.5µs   10 T States 
+2206   098A C9              ret               ; 2.5µs   10 T States 
+2207   098B             
+2208   098B             ; =============================================================================
+2209   098B             ; --- dx100ms multiplies 100ms delay ---	
+2210   098B             dx100ms: 
+2211   098B CD 93 09        call d100ms       ; 1ms (delay time)
+2212   098E 15              dec d             ; 1.0µs    4 T States 
+2213   098F C2 8B 09        jp nz,dx100ms     ; 2.5µs   10 T States 	
+2214   0992 C9              ret						; 2.5µs   10 T States 
+2215   0993             		
+2216   0993             ; =============================================================================
+2217   0993             ; --- aprox. 100ms delay (clock 4MHz) ---
+2218   0993             d100ms:               ; 4.25µs  17 T States
+2219   0993 C5              push bc           ; 2.75µs  11 T States 
+2220   0994 06 97           ld b,97h          ; 1.75µs   7 T States 
+2221   0996             aux1:
+2222   0996 0E BD           ld c,0BDh         ; 1.75µs   7 T States 
+2223   0998             aux2:
+2224   0998 0D              dec c             ; 1.0µs    4 T States 
+2225   0999 C2 98 09        jp nz,aux2        ; 2.5µs   10 T States 
+2226   099C 05              dec b             ; 1.0µs    4 T States 
+2227   099D C2 96 09        jp nz,aux1        ; 2.5µs   10 T States 
+2228   09A0 C1              pop bc            ; 2.5µs   10 T States 
+2229   09A1 C9              ret               ; 2.5µs   10 T States 
+2230   09A2             
+2231   09A2             ;///////////////////////////////////////////////////////////////////////////////
+2232   2000                 .org RAMBASE
+2233   2000             
+2234   2000             acc:    .ds NBYTES   ; Global variable, to make things a bit easier.
+2235   2007             dispcol:.ds 1
+2236   2008             
+2237   2008                 .end
+2238   2008             
+tasm: Number of errors = 3
