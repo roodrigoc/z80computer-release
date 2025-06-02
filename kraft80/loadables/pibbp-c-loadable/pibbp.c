@@ -1,6 +1,6 @@
 /*
-PBBP.C
-Programa exemplo para o KRAFT 80
+PIBBP.C
+Example program for the KRAFT 80
 2025 - ARM Coder
 */
 

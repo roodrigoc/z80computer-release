@@ -1,6 +1,6 @@
 /*
 CLOCK.C
-Programa exemplo para o KRAFT 80
+Example program for the KRAFT 80
 2025 - ARM Coder
 */
 

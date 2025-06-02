@@ -1,8 +1,8 @@
 /*
 IO-KRAFT80.C
-Rotinas de apoio para o KRAFT 80
+Support routines for the KRAFT 80
 2025 - ARM Coder
-Possui porte de funções de controle LCD por Wagner Rambo - WR Kits
+LCD control functions by Wagner Rambo - WR Kits - wrkits.com.br
 */
 
 #include <stdio.h>

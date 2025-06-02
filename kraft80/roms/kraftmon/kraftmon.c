@@ -1,6 +1,6 @@
 /*
 KRAFTMON.C
-Programa monitor (Editor e Loader de memória) para o KRAFT 80
+Monitor Program (Memory Editor and Loader) for the KRAFT 80 computer
 2025 - ARM Coder
 */
 

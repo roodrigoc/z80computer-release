@@ -1,3 +1,10 @@
+/*
+IO-KRAFT80.C
+Support routines for the KRAFT 80
+2025 - ARM Coder
+LCD control functions by Wagner Rambo - WR Kits - wrkits.com.br
+*/
+
 #include <stdio.h>
 #include "io-kraft80.h"
 
