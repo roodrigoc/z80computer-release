@@ -60,7 +60,6 @@ gsinit_next:
 	.area   _BSS
 	.area   _HEAP
 
-	.area   _CODE
-
-	.area   _GSFINAL
+	;.area   _CODE
+	;.area   _GSFINAL
 

@@ -13,7 +13,7 @@ Programa monitor (Editor e Loader de memória) para o KRAFT 80
 
 #pragma codeseg MAIN
 
-#define BUFSIZE 120
+#define BUFSIZE 250
 
 ////////////////////////////////////////////////////////////////////////////////
 int last_edit = 0x2100;
@@ -244,7 +244,11 @@ void proc_intelhex(char *buf){
 
     int type = get_prm8(buf);
     buf += 2;
-    if (type) return;
+    if (type==1) {
+
+        putstr("End of transfer.\r\n");
+        return;
+    }
     
     int i;
     char *bufbytes = buf;
@@ -284,19 +288,112 @@ void load_ihex(char *buf){
     }
 }
 
+#define SOH 1
+#define EOT 4
+#define ACK 6
+#define NAK 21
+#define ESC 27
+
+////////////////////////////////////////////////////////////////////////////////
+void load_xmodem(char *buf){
+
+    unsigned char lastseq = 1;
+    unsigned char *p;
+
+    putstr("\r\nSend the binary via XMODEM, [ENTER] to abort\r\n");
+
+    last_edit = 0x2100;
+
+    int count = 30000;
+
+    for (;;){
+
+        if (kbhit()){
+    
+            char c = getchar();
+            if (c == EOT) {
+                
+                putchar(ACK);
+                return;
+            }
+
+            if ((c == ESC)||(c == 0x0d)) return;
+
+            if (c == SOH) {
+
+                c = getchar();
+                if (c == lastseq){
+
+                    c = getchar() ^ 0xFF;
+                    if (c == lastseq){
+
+                        int i;
+                        unsigned char chksum = 0;
+
+                        p = (unsigned char *)last_edit;
+
+                        for (i = 0; i < 128; i++){
+
+                            c = getchar();
+                            chksum += c;
+                            *p = c; p++;
+                        }
+                        c = getchar();
+                        if (c == chksum){
+        
+                            last_edit += 128;
+                            lastseq++;
+                            putchar(ACK);
+                        }
+                        else{
+send_nak:
+                            putchar(NAK);
+                        }
+                    }
+                }
+            }
+        }
+        else{
+        
+            count--;
+            if (!count){
+                count = 30000;
+                putchar(NAK);
+            }
+        }
+
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 void parse_buf(char *buf){
 
     filter_buf(buf);
     int res;
     
-    if (!strncmp(buf,"load",4)){
+    if (!strcmp(buf,"load")){
     
 	load_ihex(buf);
+	return;
+    }
+
+    if (!strcmp(buf,"loadx")){
+    
+	load_xmodem(buf);
+	return;
     }
     
     switch(buf[0]){
     
+        case '?':
+            putstr("HELP\r\n"
+                   "e [nnnn] : Edit memory\r\n"
+                   "d [nnnn] : Dump memory\r\n"
+                   "g [nnnn] : Go\r\n"
+                   "load     : Load IHEX\r\n"
+                   "loadx    : Load XMODEM\r\n");
+            break;
+            
         case 'e':
             res = get_prm16(buf+1);
             if (res != -1)
@@ -332,7 +429,7 @@ void main (void){
     //setleds(0x55);
     //lcd_begin();
 
-    putstr ("\r\nKRAFTMON 1.0\r\n");
+    putstr ("\r\nKRAFTMON 1.2 by ARMCoder\r\n");
     putstr ("Ready...\r\n");
 
     last_edit = 0x2100;

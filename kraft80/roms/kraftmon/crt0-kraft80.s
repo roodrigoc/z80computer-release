@@ -68,10 +68,15 @@ PORT8251_CTRL	.equ 0x21
 
 	.org	0x08
 	jp	tx_char	;reti
+
 	.org	0x10
 	jp	get_char ;reti
+
 	.org	0x18
-	reti
+	ld	a,(bufrxqty)
+	or	a
+	ret
+	
 	.org	0x20
 	reti
 	.org	0x28
@@ -220,12 +225,13 @@ prints:
 
 	;///////////////////////////////////////////////////////////////////////
 tx_char:
+        di
 	out	(PORT8251_DATA),a
 wait_tx:
 	in	a,(PORT8251_CTRL)
-	;out	(PORTLEDS),a
 	bit	0,a
 	jr	z,wait_tx
+	ei
 	ret
 
 	;///////////////////////////////////////////////////////////////////////
@@ -364,7 +370,7 @@ gsinit_next:
 	.area   _BSS
 	.area   _HEAP
 
-	.area   _CODE
+	;.area   _CODE
 
-	.area   _GSFINAL
+	;.area   _GSFINAL
 

@@ -3,6 +3,7 @@
 
 char *lgets_noecho(char *buf, int bufsize);
 char *lgets(char *buf, int bufsize);
+int kbhit();
 void putstr(char *s);
 void putstr_lcd(char *s);
 int putchar_lcd(char c);
