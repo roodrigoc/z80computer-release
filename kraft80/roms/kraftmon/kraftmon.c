@@ -398,6 +398,7 @@ void parse_buf(char *buf){
             res = get_prm16(buf+1);
             if (res != -1)
             	last_edit = res;
+                crlf();
             	last_edit = edit_mem(last_edit);
             break;
         
@@ -414,10 +415,7 @@ void parse_buf(char *buf){
                 last_go = res;
             putstr("Go!\r\n");
             go(last_go);
-            break;
-            
-        case ':':
-            //proc_intelhex(buf);
+            crlf();
             break;
     }
 }
