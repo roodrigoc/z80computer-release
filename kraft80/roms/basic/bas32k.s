@@ -4743,9 +4743,10 @@ JJUMP1:
         LD      IX,#-1          ; Flag cold start
         JP      CSTART          ; Go and initialise
 
-MONOUT: 
-        JP      0x0008           ; output a char
-
+MONOUT: PUSH    AF
+        RST     0x0008           ; output a char
+        POP     AF
+        RET
 
 MONITR: 
         JP      0x0000           ; Restart (Normally Monitor Start)
