@@ -400,6 +400,14 @@
     [
       "fd4979f9-cac6-4d50-ad9a-4fcaee298cd9",
       "Root"
+    ],
+    [
+      "dd568ef7-68a3-4ed5-a5f3-c7fc943f3db7",
+      "kraft80-ios"
+    ],
+    [
+      "07051f35-b6bd-4737-ba5f-403488185e39",
+      "kraft80-uart-irq"
     ]
   ],
   "text_variables": {}

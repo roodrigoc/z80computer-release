@@ -149,6 +149,8 @@ int edit_mem(int addr){
     char *p = (char*)addr;
     char buf[120];
 
+    crlf();
+    
     puthex8(addr>>8);
     puthex8(addr&0xff);
     putchar(':');
@@ -186,7 +188,7 @@ int dump_mem(int addr){
     
     int i;
     int cols = 16;    
-    putstr("     0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F\r\n");
+    putstr("\r\n     0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F\r\n");
     for (i = 0; i < DUMPLEN; i++){
     
         if (cols == 16){
@@ -223,6 +225,34 @@ retgo:
     pop bc
     ret
     
+    __endasm;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void cpm_mode_on() __naked{
+
+    __asm
+
+    di
+    ld hl,#0
+    ld de,#0xc000
+    ld bc,#0x2000
+    ldir
+    ld hl,#code1
+    ld de,#0xe000
+    ld bc,#0x100
+    ldir
+    jp 0xe000
+code1:
+    ld a,#1
+    out (#0x40),a
+    ld hl,#0xc000
+    ld de,#0
+    ld bc,#0x2000
+    ldir
+    ei
+    ret    
+
     __endasm;
 }
 
@@ -371,7 +401,14 @@ void parse_buf(char *buf){
     filter_buf(buf);
     int res;
     
-    if (!strcmp(buf,"load")){
+    if (!strcmp(buf,"cpm")){
+    
+	cpm_mode_on();
+	putstr("\r\nCP/M mode is on\r\n");
+	return;
+    }
+
+if (!strcmp(buf,"load")){
     
 	load_ihex(buf);
 	return;
@@ -391,7 +428,9 @@ void parse_buf(char *buf){
                    "d [nnnn] : Dump memory\r\n"
                    "g [nnnn] : Go\r\n"
                    "load     : Load IHEX\r\n"
-                   "loadx    : Load XMODEM\r\n");
+                   "loadx    : Load XMODEM\r\n"
+                   "cpm      : Enter \"CP/M\" mode (RAM @0x0000)\r\n"
+                   );
             break;
             
         case 'e':
@@ -427,7 +466,7 @@ void main (void){
     //setleds(0x55);
     //lcd_begin();
 
-    putstr ("\r\nKRAFTMON 1.2 by ARMCoder\r\n");
+    putstr ("\r\nKRAFTMON 1.3 by ARMCoder\r\n");
     putstr ("Ready...\r\n");
 
     last_edit = 0x2100;
