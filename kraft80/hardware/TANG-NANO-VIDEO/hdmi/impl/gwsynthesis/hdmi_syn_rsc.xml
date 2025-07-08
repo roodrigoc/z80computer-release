@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Module name="top" Lut="1" T_Register="589(0)" T_Alu="238(0)" T_Lut="807(1)" T_Bsram="19(0)" T_Ssram="13(0)">
+ <SubModule name="u_pll"/>
+ <SubModule name="u_div_5"/>
+ <SubModule name="u_Reset_Sync" Register="4" Alu="4" Lut="2" T_Register="4(4)" T_Alu="4(4)" T_Lut="2(2)"/>
+ <SubModule name="svo_hdmi_inst" Register="8" Lut="1" T_Register="585(8)" T_Alu="234(0)" T_Lut="804(1)" T_Bsram="19(0)" T_Ssram="13(0)">
+  <SubModule name="svo_tcard" Register="211" Alu="123" Lut="235" T_Register="217(211)" T_Alu="123(123)" T_Lut="290(235)" T_Bsram="19(0)">
+   <SubModule name="your_instance_name" Register="6" Lut="55" Bsram="19" T_Register="6(6)" T_Lut="55(55)" T_Bsram="19(19)"/>
+  </SubModule>
+  <SubModule name="svo_term" Register="43" Lut="55" T_Register="43(43)" T_Lut="55(55)"/>
+  <SubModule name="svo_overlay" Lut="3" T_Register="90(0)" T_Lut="49(3)">
+   <SubModule name="svo_buf_in" Register="14" Lut="1" T_Register="42(14)" T_Lut="20(1)">
+    <SubModule name="svo_axis_pipe" Register="28" Lut="19" T_Register="28(28)" T_Lut="19(19)"/>
+   </SubModule>
+   <SubModule name="svo_buf_over" Register="2" Lut="1" T_Register="6(2)" T_Lut="7(1)">
+    <SubModule name="svo_axis_pipe" Register="4" Lut="6" T_Register="4(4)" T_Lut="6(6)"/>
+   </SubModule>
+   <SubModule name="svo_buf_out" Register="14" Lut="1" T_Register="42(14)" T_Lut="19(1)">
+    <SubModule name="svo_axis_pipe" Register="28" Lut="18" T_Register="28(28)" T_Lut="18(18)"/>
+   </SubModule>
+  </SubModule>
+  <SubModule name="svo_enc" Register="177" Alu="6" Lut="193" Ssram="4" T_Register="177(177)" T_Alu="6(6)" T_Lut="193(193)" T_Ssram="4(4)"/>
+  <SubModule name="svo_tmds_0" Register="17" Alu="35" Lut="74" Ssram="3" T_Register="17(17)" T_Alu="35(35)" T_Lut="74(74)" T_Ssram="3(3)"/>
+  <SubModule name="svo_tmds_1" Register="16" Alu="35" Lut="71" Ssram="3" T_Register="16(16)" T_Alu="35(35)" T_Lut="71(71)" T_Ssram="3(3)"/>
+  <SubModule name="svo_tmds_2" Register="17" Alu="35" Lut="71" Ssram="3" T_Register="17(17)" T_Alu="35(35)" T_Lut="71(71)" T_Ssram="3(3)"/>
+ </SubModule>
+</Module>

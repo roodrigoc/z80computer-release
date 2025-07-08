@@ -6,6 +6,7 @@
 	(paper "A4")
 	(title_block
 		(title "Kraft 80 by ARMCoder")
+		(date "2025-07-01")
 		(rev "1.1")
 		(comment 1 "www.github.com/ARMCoderBR")
 	)

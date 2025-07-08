@@ -408,6 +408,10 @@
     [
       "07051f35-b6bd-4737-ba5f-403488185e39",
       "kraft80-uart-irq"
+    ],
+    [
+      "4bfe3529-8147-4577-a919-36a323464fbb",
+      "kraft80-video"
     ]
   ],
   "text_variables": {}

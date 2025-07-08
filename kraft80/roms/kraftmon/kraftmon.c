@@ -452,9 +452,8 @@ if (!strcmp(buf,"load")){
             res = get_prm16(buf+1);
             if (res != -1)
                 last_go = res;
-            putstr("Go!\r\n");
+            putstr("\r\n\nGo!\r\n");
             go(last_go);
-            crlf();
             break;
     }
 }
@@ -466,7 +465,7 @@ void main (void){
     //setleds(0x55);
     //lcd_begin();
 
-    putstr ("\r\nKRAFTMON 1.3 by ARMCoder\r\n");
+    putstr ("\r\nKRAFTMON 1.3.1 by ARMCoder\r\n");
     putstr ("Ready...\r\n");
 
     last_edit = 0x2100;

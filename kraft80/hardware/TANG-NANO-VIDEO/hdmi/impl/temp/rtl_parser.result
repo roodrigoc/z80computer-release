@@ -1,0 +1,228 @@
+[
+ {
+  "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/gowin_sdpb/gowin_sdpb.v",
+  "InstLine" : 10,
+  "InstName" : "Gowin_SDPB",
+  "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/gowin_sdpb/gowin_sdpb.v",
+  "ModuleLine" : 10,
+  "ModuleName" : "Gowin_SDPB"
+ },
+ {
+  "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_openldi.v",
+  "InstLine" : 23,
+  "InstName" : "svo_openldi",
+  "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_openldi.v",
+  "ModuleLine" : 23,
+  "ModuleName" : "svo_openldi"
+ },
+ {
+  "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+  "InstLine" : 178,
+  "InstName" : "svo_dim",
+  "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+  "ModuleLine" : 178,
+  "ModuleName" : "svo_dim",
+  "SubInsts" : [
+   {
+    "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+    "InstLine" : 219,
+    "InstName" : "svo_axis_pipe",
+    "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+    "ModuleLine" : 31,
+    "ModuleName" : "svo_axis_pipe"
+   }
+  ]
+ },
+ {
+  "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+  "InstLine" : 359,
+  "InstName" : "svo_rect",
+  "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+  "ModuleLine" : 359,
+  "ModuleName" : "svo_rect"
+ },
+ {
+  "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_vdma.v",
+  "InstLine" : 23,
+  "InstName" : "svo_vdma",
+  "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_vdma.v",
+  "ModuleLine" : 23,
+  "ModuleName" : "svo_vdma",
+  "SubInsts" : [
+   {
+    "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_vdma.v",
+    "InstLine" : 255,
+    "InstName" : "fifo",
+    "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_vdma.v",
+    "ModuleLine" : 344,
+    "ModuleName" : "svo_vdma_crossclock_fifo"
+   }
+  ]
+ },
+ {
+  "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/top.v",
+  "InstLine" : 1,
+  "InstName" : "top",
+  "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/top.v",
+  "ModuleLine" : 1,
+  "ModuleName" : "top",
+  "SubInsts" : [
+   {
+    "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/top.v",
+    "InstLine" : 32,
+    "InstName" : "u_pll",
+    "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/gowin_rpll/gowin_rpll.v",
+    "ModuleLine" : 9,
+    "ModuleName" : "Gowin_rPLL"
+   },
+   {
+    "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/top.v",
+    "InstLine" : 38,
+    "InstName" : "u_div_5",
+    "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/gowin_clkdiv/gowin_clkdiv.v",
+    "ModuleLine" : 9,
+    "ModuleName" : "Gowin_CLKDIV"
+   },
+   {
+    "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/top.v",
+    "InstLine" : 44,
+    "InstName" : "u_Reset_Sync",
+    "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/top.v",
+    "ModuleLine" : 78,
+    "ModuleName" : "Reset_Sync"
+   },
+   {
+    "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/top.v",
+    "InstLine" : 50,
+    "InstName" : "svo_hdmi_inst",
+    "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/svo_hdmi.v",
+    "ModuleLine" : 23,
+    "ModuleName" : "svo_hdmi",
+    "SubInsts" : [
+     {
+      "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/svo_hdmi.v",
+      "InstLine" : 95,
+      "InstName" : "svo_tcard",
+      "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_tcard.v",
+      "ModuleLine" : 23,
+      "ModuleName" : "svo_tcard",
+      "SubInsts" : [
+       {
+        "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_tcard.v",
+        "InstLine" : 296,
+        "InstName" : "your_instance_name",
+        "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/gowin_dpb/gowin_dpb.v",
+        "ModuleLine" : 10,
+        "ModuleName" : "Gowin_DPB"
+       }
+      ]
+     },
+     {
+      "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/svo_hdmi.v",
+      "InstLine" : 115,
+      "InstName" : "svo_term",
+      "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_term.v",
+      "ModuleLine" : 23,
+      "ModuleName" : "svo_term"
+     },
+     {
+      "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/svo_hdmi.v",
+      "InstLine" : 126,
+      "InstName" : "svo_overlay",
+      "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+      "ModuleLine" : 250,
+      "ModuleName" : "svo_overlay",
+      "SubInsts" : [
+       {
+        "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+        "InstLine" : 307,
+        "InstName" : "svo_buf_in",
+        "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+        "ModuleLine" : 101,
+        "ModuleName" : "svo_buf",
+        "SubInsts" : [
+         {
+          "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+          "InstLine" : 145,
+          "InstName" : "svo_axis_pipe",
+          "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+          "ModuleLine" : 31,
+          "ModuleName" : "svo_axis_pipe"
+         }
+        ]
+       },
+       {
+        "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+        "InstLine" : 321,
+        "InstName" : "svo_buf_over",
+        "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+        "ModuleLine" : 101,
+        "ModuleName" : "svo_buf",
+        "SubInsts" : [
+         {
+          "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+          "InstLine" : 145,
+          "InstName" : "svo_axis_pipe",
+          "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+          "ModuleLine" : 31,
+          "ModuleName" : "svo_axis_pipe"
+         }
+        ]
+       },
+       {
+        "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+        "InstLine" : 335,
+        "InstName" : "svo_buf_out",
+        "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+        "ModuleLine" : 101,
+        "ModuleName" : "svo_buf",
+        "SubInsts" : [
+         {
+          "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+          "InstLine" : 145,
+          "InstName" : "svo_axis_pipe",
+          "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_utils.v",
+          "ModuleLine" : 31,
+          "ModuleName" : "svo_axis_pipe"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/svo_hdmi.v",
+      "InstLine" : 147,
+      "InstName" : "svo_enc",
+      "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_enc.v",
+      "ModuleLine" : 23,
+      "ModuleName" : "svo_enc"
+     },
+     {
+      "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/svo_hdmi.v",
+      "InstLine" : 164,
+      "InstName" : "svo_tmds_0",
+      "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_tmds.v",
+      "ModuleLine" : 23,
+      "ModuleName" : "svo_tmds"
+     },
+     {
+      "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/svo_hdmi.v",
+      "InstLine" : 174,
+      "InstName" : "svo_tmds_1",
+      "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_tmds.v",
+      "ModuleLine" : 23,
+      "ModuleName" : "svo_tmds"
+     },
+     {
+      "InstFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/svo_hdmi.v",
+      "InstLine" : 184,
+      "InstName" : "svo_tmds_2",
+      "ModuleFile" : "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi/svo_tmds.v",
+      "ModuleLine" : 23,
+      "ModuleName" : "svo_tmds"
+     }
+    ]
+   }
+  ]
+ }
+]

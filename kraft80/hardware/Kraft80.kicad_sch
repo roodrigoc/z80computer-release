@@ -6,7 +6,7 @@
 	(paper "A4")
 	(title_block
 		(title "Kraft 80 by ARMCoder")
-		(date "2025-06-18")
+		(date "2025-07-01")
 		(rev "1.1")
 		(comment 1 "www.github.com/ARMCoderBR")
 		(comment 3 "Inspired on the project Z80 Alpha from WR Kits (www.wrkits.com.br)")
@@ -7435,7 +7435,7 @@
 			(embedded_fonts no)
 		)
 	)
-	(text "PORTS:\n00h - LEDS(W) & BUTTONS(R)\n10h - LCD(W)\n20h - 8251(RW)\n30h - 8259A(RW)\n40h - FFs(W)"
+	(text "PORTS:\n00h - LEDS(W) & BUTTONS(R)\n10h - LCD(W)\n20h - 8251(RW)\n30h - 8259A(RW)\n40h - FFs(W)\n50h - VIDEO"
 		(exclude_from_sim no)
 		(at 249.936 148.082 0)
 		(effects
@@ -8569,7 +8569,7 @@
 	)
 	(wire
 		(pts
-			(xy 257.81 124.46) (xy 261.62 124.46)
+			(xy 257.81 124.46) (xy 270.51 124.46)
 		)
 		(stroke
 			(width 0)
@@ -10239,16 +10239,6 @@
 	)
 	(wire
 		(pts
-			(xy 270.51 123.19) (xy 261.62 123.19)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "74bb5c56-6077-45eb-879b-8ef33888baf1")
-	)
-	(wire
-		(pts
 			(xy 168.91 114.3) (xy 179.07 114.3)
 		)
 		(stroke
@@ -10256,16 +10246,6 @@
 			(type default)
 		)
 		(uuid "74c8cc0e-795f-4470-bfb9-744d81dd5dd5")
-	)
-	(wire
-		(pts
-			(xy 261.62 123.19) (xy 261.62 124.46)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "74ed16ff-9528-49e0-8cf9-cf10aca7e7f9")
 	)
 	(bus
 		(pts
@@ -10546,16 +10526,6 @@
 			(type default)
 		)
 		(uuid "86ec94c0-11ef-4b15-b259-d7622358b72f")
-	)
-	(wire
-		(pts
-			(xy 261.62 120.65) (xy 261.62 121.92)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "87c0bd18-19b4-4b95-ad80-108d9a96d564")
 	)
 	(wire
 		(pts
@@ -11189,16 +11159,6 @@
 	)
 	(wire
 		(pts
-			(xy 270.51 120.65) (xy 261.62 120.65)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "b46e46b0-30d2-4e8a-96e9-06de49a0b4fd")
-	)
-	(wire
-		(pts
 			(xy 92.71 125.73) (xy 92.71 127)
 		)
 		(stroke
@@ -11629,6 +11589,16 @@
 	)
 	(wire
 		(pts
+			(xy 257.81 129.54) (xy 270.51 129.54)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e0634675-56c4-4138-ac24-429f9f8aa8a1")
+	)
+	(wire
+		(pts
 			(xy 151.13 62.23) (xy 167.64 62.23)
 		)
 		(stroke
@@ -11699,7 +11669,7 @@
 	)
 	(wire
 		(pts
-			(xy 261.62 121.92) (xy 257.81 121.92)
+			(xy 257.81 121.92) (xy 270.51 121.92)
 		)
 		(stroke
 			(width 0)
@@ -12286,16 +12256,6 @@
 			(justify left bottom)
 		)
 		(uuid "430d08ac-b978-483b-a91f-6e886f525e0a")
-	)
-	(label "CLOCK"
-		(at 35.56 36.83 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "469962d6-4666-4e59-9a44-395247814d74")
 	)
 	(label "A1"
 		(at 153.67 31.75 0)
@@ -13097,16 +13057,6 @@
 		)
 		(uuid "e1beea9f-7793-4f68-a98d-aebf5220bf4d")
 	)
-	(label "CLOCK"
-		(at 99.06 157.48 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "e4c2626c-dd55-4fdb-a96b-03e25cb8b941")
-	)
 	(label "D4"
 		(at 80.01 82.55 0)
 		(effects
@@ -13200,6 +13150,28 @@
 		(uuid "0a73729b-3641-4593-9bf6-0410e353cfc1")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 271.318 59.69 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "CLOCK"
+		(shape output)
+		(at 99.06 157.48 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "1fffe921-d7ef-495f-8af9-f769ad68b2c4")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 108.2138 157.48 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13319,6 +13291,28 @@
 			)
 		)
 	)
+	(global_label "~{VID_CS}"
+		(shape output)
+		(at 270.51 129.54 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "56aa23fd-ff8f-4e08-84cf-fd796f914dd2")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 279.9057 129.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+	)
 	(global_label "~{READ}"
 		(shape input)
 		(at 168.91 114.3 180)
@@ -13343,7 +13337,7 @@
 	)
 	(global_label "~{P8251_CS}"
 		(shape output)
-		(at 270.51 120.65 0)
+		(at 270.51 121.92 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -13353,7 +13347,7 @@
 		)
 		(uuid "59e8b604-ed28-4191-9a1d-bef252803673")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 283.0503 120.65 0)
+			(at 283.0503 121.92 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13475,7 +13469,7 @@
 	)
 	(global_label "~{P8259_CS}"
 		(shape output)
-		(at 270.51 123.19 0)
+		(at 270.51 124.46 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -13485,7 +13479,7 @@
 		)
 		(uuid "a581346d-452d-4e59-b8a1-c82921ffca7f")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 283.0503 123.19 0)
+			(at 283.0503 124.46 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13640,6 +13634,28 @@
 		(uuid "ecd04da6-b054-42f1-b6fc-95e954cae2d8")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 100.9734 146.05 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "CLOCK"
+		(shape input)
+		(at 35.56 36.83 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "f68d6aad-4f44-4a16-a3d7-c2d982a3ab2d")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 26.4062 36.83 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -20964,6 +20980,48 @@
 			(project "Kraft80"
 				(path "/fd4979f9-cac6-4d50-ad9a-4fcaee298cd9"
 					(page "3")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 55.88 181.61)
+		(size 17.78 11.43)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 255 255 194 1.0000)
+		)
+		(uuid "4bfe3529-8147-4577-a919-36a323464fbb")
+		(property "Sheetname" "kraft80-video"
+			(at 57.404 184.404 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "kraft80-video.kicad_sch"
+			(at 55.88 202.5146 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(instances
+			(project "Kraft80"
+				(path "/fd4979f9-cac6-4d50-ad9a-4fcaee298cd9"
+					(page "4")
 				)
 			)
 		)
