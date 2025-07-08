@@ -1,14 +1,13 @@
-###################################################
-# Kraft80                                         #
-# A Z80-based computer for nostalgic enthusiasts  #
-# 2025 - ARMCoder                                 # 
-###################################################
+# Kraft80
+A Z80-based computer for nostalgic enthusiasts\
+2025 - ARMCoder
 
-Q & A
-=====
+<IMG SRC="https://drive.google.com/uc?export=view&id=1LF7yicNHPt8nTo6QGMrmz3XqD153_LK3" width=450>
 
-What is this?
-=============
+
+## Q & A
+
+## What is this?
 
   For starters, this is no more than a hobby project: a Z80-based computer. By
 
@@ -23,8 +22,7 @@ it to perform some practical automation tasks and it WILL work, it's just not
 recommended nowadays. Get a PIC or Arduino instead.
 
 
-Why did you build it?
-=====================
+## Why did you build it?
 
   There's a guy here in Brazil that offers training in several electronics
 
@@ -47,8 +45,7 @@ PCB and LOTS of wire (good thing the kit included the DIP sockets and a ZIF
 socket for the BIOS memory).
 
 
-What is the 'AlphaPlus' directory?
-==================================
+## What is the 'AlphaPlus' directory?
 
   Very soon I noticed that the original "Z80 Alpha" was very lacking in memory
 
@@ -71,6 +68,7 @@ decoding. The resulting hardware is then dual-role, the original "Z80 Alpha"
 
 and also the "Z80 Alpha Plus" depending on the jumpers and chips used.
 
+```
 
   VALID COMBINATIONS:
 
@@ -82,9 +80,9 @@ and also the "Z80 Alpha Plus" depending on the jumpers and chips used.
   | 2-3  2-3  2-3  2-3 | 28C64 | 62256| 62256 | Z80 ALPHA PLUS       |
   +--------------------+-------+------+-------+----------------------+
 
+```
 
-Are there any software for the 'AlphaPlus'?
-===========================================
+## Are there any software for the 'AlphaPlus'?
 
   The AlphaPlus is a project that I didn't want to keep developing for long, so
   
@@ -119,14 +117,12 @@ tests. This program is essentially the same that's shipped with the original
 make it compatible with the new memory map.
 
 
-Will there be any future developments or software for the AlphaPlus?
-====================================================================
+## Will there be any future developments or software for the AlphaPlus?
 
   No. See the 'Kraft80' project instead.
 
 
-What is the Kraft80 computer, then?
-===================================
+## What is the Kraft80 computer, then?
 
   Now that you have a slight notion of what the 'Z80 Alpha Plus' is all about, 
 
@@ -136,6 +132,7 @@ Alpha Plus. Now it's a great time to find the 'Kraft80.pdf' schematic and look
 
 around.
 
+<IMG SRC="https://drive.google.com/uc?export=view&id=12o2hK_ulWPi24gsToC2CAqkSXHMqq0OI" width=600>
 
   The first change is that the memory types and sizes got fixed, so there are no
 
@@ -149,8 +146,7 @@ for some cleanup in the board.
 interrupt controller, a pair of D-flipflops and (yes!) a video controller!
 
   
-Kraft80 Basic Characteristics
-=============================
+## Kraft80 Basic Characteristics
 
   CPU:   Z80A, 4 MHz
 
