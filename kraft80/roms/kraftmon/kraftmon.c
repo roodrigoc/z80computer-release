@@ -423,7 +423,7 @@ if (!strcmp(buf,"load")){
     switch(buf[0]){
     
         case '?':
-            putstr("HELP\r\n"
+            putstr("\r\n\nHELP\r\n"
                    "e [nnnn] : Edit memory\r\n"
                    "d [nnnn] : Dump memory\r\n"
                    "g [nnnn] : Go\r\n"
@@ -465,7 +465,7 @@ void main (void){
     //setleds(0x55);
     //lcd_begin();
 
-    putstr ("\r\nKRAFTMON 1.3.1 by ARMCoder\r\n");
+    putstr ("\r\nKRAFTMON 1.3.2 by ARMCoder\r\n");
     putstr ("Ready...\r\n");
 
     last_edit = 0x2100;
