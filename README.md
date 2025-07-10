@@ -148,6 +148,7 @@ interrupt controller, a pair of D-flipflops and (yes!) a video controller!
   
 ## Kraft80 Basic Characteristics
 
+```
   CPU:   Z80A, 4 MHz
 
   BIOS:  8 kbytes
@@ -178,7 +179,7 @@ interrupt controller, a pair of D-flipflops and (yes!) a video controller!
   COMM:  Async 19200 BPS, 8N1
 
   VIDEO: VGA 640x480 @60Hz (mapped as 320x240, 4BPP, 16 colors) - HDMI output
-  
+```
 
 What can the Kraft80 currently do?
 ==================================
