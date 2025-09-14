@@ -1,10 +1,9 @@
 all:				wolfram.bin
 
-wolfram.bin:			crt0-kraft80-loadable.s wolfram.c io-kraft80.c io-kraft80.h
-				sdasz80 -o -l -s -g crt0-kraft80-loadable.s
-				sdcc -c -V --disable-warning 85 -mz80 --opt-code-size --std-sdcc99 wolfram.c
-				sdcc -c -V --disable-warning 85 -mz80 --opt-code-size --std-sdcc99 io-kraft80.c
-				sdcc -mz80 --code-loc 0x2700 --no-std-crt0 -Wl -b_MAIN=0x2100,-b_DATA=0x3000 crt0-kraft80-loadable.rel wolfram.rel io-kraft80.rel
+wolfram.bin:			wolfram.c ../io-kraft80/io-kraft80.h ../io-kraft80/crt0-kraft80-loadable.rel ../io-kraft80/io-kraft80.rel 
+				sdcc -c -V --disable-warning 85 -mz80 -I../io-kraft80 --opt-code-size --std-sdcc99 wolfram.c
+				#sdcc -mz80 --code-loc 0x2A00 -DUSE_KRAFTMON=1 --no-std-crt0 -Wl -b_MAIN=0x2100,-b_DATA=0x3300 ../io-kraft80/crt0-kraft80-loadable.rel ../io-kraft80/io-kraft80.rel wolfram.rel
+				sdcc -mz80 --code-loc 0x4B00 -DUSE_KRAFTMON=0 --no-std-crt0 -Wl -b_MAIN=0x4200,-b_DATA=0x5400 ../io-kraft80/crt0-kraft80-loadable.rel ../io-kraft80/io-kraft80.rel wolfram.rel
 				mv crt0-kraft80-loadable.ihx wolfram.ihx
 				objcopy --input-target=ihex --output-target=binary wolfram.ihx wolfram.bin
 

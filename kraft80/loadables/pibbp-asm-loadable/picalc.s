@@ -70,7 +70,7 @@ PORTB           .equ 0x10 ;PORTB address
 EN              .equ 0x01 ;LCD enable pin (PORTB bit 1)
 RS              .equ 0x01 ;LCD RS pin (uses or logic)
 
-CODEBASE	 .equ 0x2100
+USE_KRAFTMON	.equ	0
 
 ; Algorithm constants
 NUM_DECS        .equ 11
@@ -85,7 +85,15 @@ NBYTES1         .equ (NBYTES-1)
 
     .area	_HEADER (ABS)
 
-    .org CODEBASE
+		.if	USE_KRAFTMON == 1
+
+		.org 0x2100
+
+		.else
+
+		.org 0x4200
+
+		.endif
 	
     jp _main
 

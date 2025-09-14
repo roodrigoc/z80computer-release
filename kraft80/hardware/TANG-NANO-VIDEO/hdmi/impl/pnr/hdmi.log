@@ -1,13 +1,14 @@
-Reading netlist file: "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/impl/gwsynthesis/hdmi.vg"
-Parsing netlist file "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/impl/gwsynthesis/hdmi.vg" completed
+Reading netlist file: "Z:\hdmi\impl\gwsynthesis\hdmi.vg"
+Parsing netlist file "Z:\hdmi\impl\gwsynthesis\hdmi.vg" completed
 Processing netlist completed
-Reading constraint file: "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/hdmi.cst"
+Reading constraint file: "Z:\hdmi\src\hdmi.cst"
 Physical Constraint parsed completed
 Running placement......
 [10%] Placement Phase 0 completed
 [20%] Placement Phase 1 completed
 [30%] Placement Phase 2 completed
 WARN  (TA1132) :  'cpuclk' was determined to be a clock but was not created.
+WARN  (TA1132) :  'test1/wng1/fsr_clk' was determined to be a clock but was not created.
 WARN  (TA1132) :  'svo_hdmi_inst/svo_tcard/bram_aclock' was determined to be a clock but was not created.
 WARN  (TA1132) :  'u_div_5/clkdiv_inst/CLKOUT.default_gen_clk' was determined to be a clock but was not created.
 WARN  (TA1117) : Can't calculate clocks' relationship between: "u_div_5/clkdiv_inst/CLKOUT.default_gen_clk" and "cpuclk"
@@ -26,10 +27,10 @@ Bitstream generation in progress......
 Bitstream generation completed
 Running power analysis......
 [100%] Power analysis completed
-Generate file "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/impl/pnr/hdmi.power.html" completed
-Generate file "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/impl/pnr/hdmi.pin.html" completed
-Generate file "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/impl/pnr/hdmi.rpt.html" completed
-Generate file "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/impl/pnr/hdmi.rpt.txt" completed
-Generate file "/home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/impl/pnr/hdmi.tr.html" completed
-Mon Jul  7 23:05:08 2025
+Generate file "Z:\hdmi\impl\pnr\hdmi.power.html" completed
+Generate file "Z:\hdmi\impl\pnr\hdmi.pin.html" completed
+Generate file "Z:\hdmi\impl\pnr\hdmi.rpt.html" completed
+Generate file "Z:\hdmi\impl\pnr\hdmi.rpt.txt" completed
+Generate file "Z:\hdmi\impl\pnr\hdmi.tr.html" completed
+Fri Sep 12 17:32:32 2025
 

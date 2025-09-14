@@ -27,7 +27,7 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
     input nwr,
     input nrd,
     input nrst,
-    input [2:0] addr,
+    input [3:0] addr,
 	input clk, resetn,
     output [5:0] led,
     input cpuclk,
@@ -44,9 +44,6 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
 	wire [SVO_BITS_PER_GREEN-1:0] g;
 	wire [SVO_BITS_PER_BLUE-1:0] b;
 
-//    reg [7:0] regbusdata;
-//    assign data = regbusdata;
-
     reg[15:0] wraddr_tmp;
     reg [7:0] bramdatain_tmp;
 
@@ -59,15 +56,16 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
     reg bram_aclock;
     reg bram_lock;
 
-    reg started;
-    reg[3:0] wstate;
+    reg[4:0] wstate;
     reg got_wr;
+    reg got_rd;
 
     // CGA Mapping colors
     reg [3:0] cga_r[15:0];
     reg [3:0] cga_g[15:0];
     reg [3:0] cga_b[15:0];
-    reg [3:0] color_index;
+
+    wire[3:0] color_index;
     assign r[7:4] = cga_r[color_index];
     assign g[7:4] = cga_g[color_index];
     assign b[7:4] = cga_b[color_index];
@@ -75,13 +73,7 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
     assign g[3:0] = 0;
     assign b[3:0] = 0;
 
-    wire border;
     reg [18:0] pixelcount;
-    reg [16:0] memcounth;
-    reg [7:0] memcountl;
-    reg presch;
-    reg [1:0]prescl;
-    reg [1:0]prescnibble;
 
     reg [31:0] cled5;
     reg [31:0] cled4;
@@ -95,19 +87,15 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
 
     assign led[5:2] = ~regled;
 
-    //assign border = ((pixelcount < 25600) | (pixelcount >= 281600));
-    assign border = 0;//((pixelcount < 25599) | (pixelcount >= 281599));
-
-    wire[16:0] memrdpos;
-    assign memrdpos = memcounth + memcountl;
-
-    assign bramrdaddr = bram_lock & (bramwraddr == memrdpos) ? 38400 : memrdpos;
+    reg videomode;
 
     initial begin
+        got_wr = 0;
+        got_rd = 0;
+
+        videomode = 0;
         wstate <= 0;
         bramwraddr <= 0;
-        //regbusdata <= 8'bz;
-        started <= 0;
 
         bram_aclock <= 0;
         bram_lock <= 0;
@@ -135,8 +123,11 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
     wire cpuwrite;
     wire cpuread;
 
-    assign cpuwrite = ncs | nwr;
-    assign cpuread  = ncs | nrd;
+    wire ncs2;
+    assign ncs2 = ncs | (addr > 3);
+
+    assign cpuwrite = ncs2 | nwr;
+    assign cpuread  = ncs2 | nrd;
 
     wire [7:0] dataaout;
 
@@ -164,37 +155,57 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
                 else
                 regled[3] <= 0;
 
-            if (!cpuwrite) begin
 
-                if (!got_wr) begin
-                    case (addr)
-                        0: begin bramdatain <= data; wstate <= 1; end
-                        1: begin cled5 <= 800000; bramwraddr[7:0] <= data; end
-                        2: begin cled4 <= 800000; bramwraddr[15:8] <= data; wstate <= 6; end
-                        default: cled3 <= 800000;
-                    endcase
-
-                    got_wr <= 1;
-
-                end
-
+            if (!nrst) begin
+                got_wr = 0;
+                got_rd = 0;
             end
             else begin
+                if (!cpuwrite) begin
 
-                got_wr <= 0;
+                    if (!got_wr) begin
+                        case (addr)
+                            0: begin bramdatain <= data; wstate <= 1; end
+                            1: begin cled5 <= 800000; bramwraddr[7:0] <= data; end
+                            2: begin cled4 <= 800000; bramwraddr[15:8] <= data; wstate <= 6; end
+                            3: if (data[7:4] == 0) begin videomode = data[0]; bramdatain <= 0; bramwraddr <= 0; bram_awrite <= 1; wstate <= 10; end
+                            default: cled3 <= 800000;
+                        endcase
 
-                case (wstate)
-                    1: begin bram_lock <= 1; bram_awrite <= 1; wstate <= 2; end
-                    2: begin bram_aclock = 1; wstate <= 3; end
-                    3: begin bram_aclock = 0; wstate <= 4; end
-                    4: begin bramwraddr <= bramwraddr + 1; bram_awrite <= 0; bram_lock = 0; wstate <= 0; end
-                    
-                    6: begin bram_aclock = 1; wstate <= 7; end
-                    7: begin bram_aclock = 0; wstate <= 0; end
-                endcase
+                        got_wr <= 1;
+
+                    end
+                end
+                if (!cpuread) begin
+                    got_rd <= 1;
+                end
+                else begin
+
+                    if (got_rd) begin
+                        if (!videomode) begin
+                            bramwraddr <= bramwraddr + 1;   // In Text Mode increment after read
+                            wstate <= 5;
+                        end
+                        got_rd <= 0;
+                    end
+
+                    got_wr <= 0;
+
+                    case (wstate)
+                        1: begin bram_lock <= 1; bram_awrite <= 1; wstate <= 2; end
+                        2: begin bram_aclock = 1; wstate <= 3; end
+                        3: begin bram_aclock = 0; wstate <= 4; end
+                        4: begin bramwraddr <= bramwraddr + 1; bram_awrite <= 0; bram_lock = 0; wstate <= 0; end
+                        5: wstate <= 6;
+                        6: begin bram_aclock = 1; wstate <= 7; end
+                        7: begin bram_aclock = 0; wstate <= 0; end
+                       10: begin bram_aclock = 1; wstate <= 11; end
+                       11: begin bram_aclock = 0; wstate <= 12; bramwraddr <= bramwraddr + 1; end
+                       12: if (bramwraddr == 38400) begin bramwraddr <= 0; wstate <= 0; bram_awrite <= 0; end else wstate <= 10;
+
+                    endcase
+                end
             end
-
-
         end
     end
 
@@ -202,54 +213,12 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
 
 		if (!resetn) begin
             pixelcount <= 0;
-            memcounth <= 0;
-            memcountl <= 0;
-            presch <= 0;
-            prescl <= 0;
 		end
         else begin
 
             /////////////////
             if (!out_axis_tvalid || out_axis_tready) begin
 
-                if (border) begin
-                    color_index <= 0;
-                    memcountl <= 0;
-                    memcounth <= 0;
-                    presch <= 0;
-                    prescl <= 0;
-                    prescnibble <= 0;
-                end
-                else 
-                begin
-                
-                    color_index <= prescnibble[1] ? bramdataout[3:0] : bramdataout[7:4];
-                    prescnibble <= prescnibble + 1;
-                    
-                    if (prescl == 3) begin
-                        if (memcountl < 159)
-                            memcountl <= memcountl + 1;
-                        else begin
-                            memcountl <= 0;
-                            if (presch) memcounth <= memcounth + 160;
-                            presch <= ~presch;
-                        end
-                    end
-
-                    prescl <= prescl + 1;
-                end
-
-                if (pixelcount == 307199)
-                begin
-                    color_index <= 0;
-                    memcountl <= 0;
-                    memcounth <= 0;
-                    presch <= 0;
-                    prescl <= 0;
-                    prescnibble <= 0;
-                    pixelcount <= pixelcount + 1;
-                end
-                else
                 if (pixelcount == 307200)
                     pixelcount <= 0;
                 else
@@ -269,8 +238,6 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
             if (!out_axis_tvalid || out_axis_tready) begin
 
                 out_axis_tuser[0] <= !pixelcount;
-//                if (!out_axis_tuser[0]) begin
-//                end
 
                 out_axis_tvalid <= 1;
 
@@ -279,36 +246,199 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
         end
 	end
 
-//    Gowin_SDPB video_bram(
-//        .dout(bramdataout), //output [7:0] dout
-//        .clka(bram_aclock), //input clka
-//        .cea(1),            //input cea
-//        .reseta(0),         //input reseta
-//        .clkb(clk),         //input clkb
-//        .ceb(1),            //input ceb (read)
-//        .resetb(0),         //input resetb
-//        .oce(0),            //input oce
-//        .ada(bramwraddr),   //input [15:0] ada
-//        .din(bramdatain),   //input [7:0] din
-//        .adb(bramrdaddr)    //input [15:0] adb
-//    );
+    wire[15:0] bramrdaddr_mode0;
+    wire[15:0] bramrdaddr_mode1;
+    wire[3:0] color_index_mode0;
+    wire[3:0] color_index_mode1;
+
+    textmode_80x60 txtmode0 ( .pixelcount(pixelcount),
+                              .color_index(color_index_mode0),
+                              .clk(clk),
+                              .out_axis_tvalid(out_axis_tvalid),
+                              .out_axis_tready(out_axis_tready),
+                              .resetn(resetn),
+                              .bramrdaddr(bramrdaddr_mode0),
+                              .bramdataout(bramdataout),
+                              .bramwraddr(bramwraddr));
+
+    graphmode_320x240_4bpp grmode1 ( .pixelcount(pixelcount),
+                                     .color_index(color_index_mode1),
+                                     .clk(clk),
+                                     .out_axis_tvalid(out_axis_tvalid),
+                                     .out_axis_tready(out_axis_tready),
+                                     .resetn(resetn),
+                                     .bramrdaddr(bramrdaddr_mode1),
+                                     .bramdataout(bramdataout) );
+
+    //wire[15:0] bramrdaddr;
+
+    assign bramrdaddr = videomode?bramrdaddr_mode1:bramrdaddr_mode0;
+    assign color_index = videomode?color_index_mode1:color_index_mode0;
 
     Gowin_DPB your_instance_name(
         .douta(dataaout),      //output [7:0] douta
         .doutb(bramdataout),  //output [7:0] doutb
         .clka(bram_aclock),   //input clka
-        .ocea(0),             //input ocea
-        .cea(1),              //input cea
-        .reseta(0),           //input reseta
+        .ocea(1'b0),             //input ocea
+        .cea(1'b1),              //input cea
+        .reseta(1'b0),           //input reseta
         .wrea(bram_awrite),   //input wrea
         .clkb(clk),           //input clkb
-        .oceb(0),             //input oceb
-        .ceb(1),              //input ceb
-        .resetb(0),           //input resetb
-        .wreb(0),             //input wreb
+        .oceb(1'b0),             //input oceb
+        .ceb(1'b1),              //input ceb
+        .resetb(1'b0),           //input resetb
+        .wreb(1'b0),             //input wreb
         .ada(bramwraddr),     //input [15:0] ada
         .dina(bramdatain),    //input [7:0] dina
         .adb(bramrdaddr),     //input [15:0] adb
-        .dinb(0)              //input [7:0] dinb
+        .dinb(8'b0)              //input [7:0] dinb
     );
+
+
 endmodule
+
+/////////////////////////////////////////////////////////////////////////////////
+module graphmode_320x240_4bpp (
+
+    input [18:0] pixelcount,
+    output reg [3:0] color_index,
+    input clk,
+    input out_axis_tvalid,
+    input out_axis_tready,
+    input resetn,
+    output [15:0] bramrdaddr,
+    input [7:0] bramdataout
+);
+
+    reg [16:0] memcounth;
+    reg [7:0] memcountl;
+    reg presch;
+    reg [1:0]prescl;
+    reg [1:0]prescnibble;
+
+    wire[16:0] memrdpos;
+    assign memrdpos = memcounth + memcountl;
+
+    assign bramrdaddr = memrdpos;//bram_lock & (bramwraddr == memrdpos) ? 38400 : memrdpos;
+
+    always @(negedge clk) begin
+
+		if (!resetn) begin
+            memcounth <= 0;
+            memcountl <= 0;
+            presch <= 0;
+            prescl <= 0;
+		end
+        else begin
+
+            /////////////////
+            if (!out_axis_tvalid || out_axis_tready) begin
+
+                color_index <= prescnibble[1] ? bramdataout[3:0] : bramdataout[7:4];
+                prescnibble <= prescnibble + 1;
+                
+                if (prescl == 3) begin
+                    if (memcountl < 159)
+                        memcountl <= memcountl + 1;
+                    else begin
+                        memcountl <= 0;
+                        if (presch) memcounth <= memcounth + 160;
+                        presch <= ~presch;
+                    end
+                end
+
+                prescl <= prescl + 1;
+
+                if (pixelcount == 307199)
+                begin
+                    color_index <= 0;
+                    memcountl <= 0;
+                    memcounth <= 0;
+                    presch <= 0;
+                    prescl <= 0;
+                    prescnibble <= 0;
+                end
+            end
+        end
+    end
+
+endmodule
+
+/////////////////////////////////////////////////////////////////////////////////
+module textmode_80x60 (
+
+    input [18:0] pixelcount,
+    output reg [3:0] color_index,
+    input clk,
+    input out_axis_tvalid,
+    input out_axis_tready,
+    input resetn,
+    output [15:0] bramrdaddr,
+    input [7:0] bramdataout,
+    input [15:0] bramwraddr
+);
+
+	// --------------------------------------------------------------
+	// Font Memory
+	// --------------------------------------------------------------
+`include "termfont_new.vh"
+
+	function font(input [7:0] c, input [2:0] x, input [2:0] y);
+		font = fontmem_new[{c, y, x}];
+	endfunction
+
+    reg[8:0] rastercount;
+    reg[2:0] subrastercount;
+    reg[9:0] hpixelcount;
+    reg[12:0] memlinebase;
+
+    wire[16:0] memrdpos;
+    assign memrdpos = (hpixelcount >> 3) + memlinebase;
+
+    assign bramrdaddr = memrdpos;//bram_lock & (bramwraddr == memrdpos) ? 38400 : memrdpos;
+
+    reg[5:0] cursorcount;
+    wire iscursor;
+    assign iscursor = cursorcount[5] & ((bramrdaddr == bramwraddr)&&(subrastercount == 7)) ;
+
+
+    always @(negedge clk) begin
+
+		if (!resetn) begin
+		end
+        else begin
+
+            /////////////////
+            if (!out_axis_tvalid || out_axis_tready) begin
+
+                color_index <= iscursor ^ font(bramdataout,hpixelcount[2:0],rastercount[2:0]) ? 10 : 0;
+
+                if (hpixelcount == 639) begin
+
+                    hpixelcount <= 0;
+                    rastercount <= rastercount + 1;
+
+                    if (subrastercount == 7)
+                        memlinebase <= memlinebase + 80;
+                    subrastercount <= subrastercount + 1;
+                end
+                else
+                    hpixelcount <= hpixelcount + 1;
+
+                if (pixelcount == 307199)
+                begin
+                    cursorcount = cursorcount + 1;
+                    color_index <= 0;
+                    rastercount <= 0;
+                    subrastercount <= 0;
+                    hpixelcount <= 0;
+                    memlinebase <= 0;
+                end
+            end
+        end
+    end
+
+endmodule
+
+
+

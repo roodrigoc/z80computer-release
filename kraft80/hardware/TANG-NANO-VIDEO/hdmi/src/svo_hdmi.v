@@ -27,7 +27,7 @@ module svo_hdmi(
   input nwr,
   input nrd,
   input nrst,
-  input [2:0] addr,
+  input [3:0] addr,
   output [5:0] led,
   input cpuclk,
 

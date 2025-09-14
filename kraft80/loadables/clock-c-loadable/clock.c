@@ -30,7 +30,14 @@ void main (void){
     unsigned char buttons_a;
     unsigned char delta;
 
+#if USE_KRAFTMON == 1
     isr2vector = (int*)0xff04;
+    char *p = 0xfffe;
+#else
+    isr2vector = (int*)0x4104;
+    char *p = 0x41fe;
+#endif
+
     setleds(0x55);
     lcd_begin();
 
@@ -46,7 +53,6 @@ void main (void){
 
     buttons = buttons_a = readbuttons();
     
-    char *p = 0xfffe;
     for (;;){
 
         buttons = readbuttons();
