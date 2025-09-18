@@ -50,7 +50,7 @@ bufrxins	.equ bufrx+BUFRXSIZE	;0x4190
 bufrxget	.equ bufrxins+1		;0x4191
 bufrxqty	.equ bufrxget+1		;0x4192
 
-VIDROWS		.equ	60
+VIDROWS		.equ	48
 VIDCOLS		.equ	80
 vidrow		.equ bufrxqty+1		;0x4193
 vidcol		.equ vidrow+1		;0x4194

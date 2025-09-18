@@ -7,7 +7,7 @@
 
 -mod_name Gowin_DPB
 -file_name gowin_dpb
--path /home/milton/kraft80/hardware/TANG-NANO-VIDEO/hdmi/src/gowin_dpb/
+-path Z:/hdmi/src/gowin_dpb/
 -type RAM_DP
 -file_type vlg
 -bram_b true
@@ -20,5 +20,5 @@
 -read_mode_1 bypass
 -write_mode_0 normal
 -write_mode_1 normal
--speed true
+-speed false
 -reset_mode sync

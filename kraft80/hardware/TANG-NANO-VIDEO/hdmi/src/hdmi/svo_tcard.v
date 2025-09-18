@@ -405,12 +405,16 @@ module textmode_80x60 (
 	// --------------------------------------------------------------
 `include "termfont_new.vh"
 
+`define TEXT_COLS 80
+`define TEXT_ROWS 48
+`define RASTERS_PER_ROW 10
+`define RASTERS_PER_FONT 8
+
 	function font(input [7:0] c, input [2:0] x, input [2:0] y);
 		font = fontmem_new[{c, y, x}];
 	endfunction
 
-    reg[8:0] rastercount;
-    reg[2:0] subrastercount;
+    reg[3:0] subrastercount;
     reg[9:0] hpixelcount;
     reg[12:0] memlinebase;
 
@@ -422,7 +426,12 @@ module textmode_80x60 (
 
     reg[5:0] cursorcount;
     wire iscursor;
-    assign iscursor = cursorcount[5] & ((bramrdaddr == bramwraddr)&&(subrastercount == 7)) ;
+    assign iscursor = cursorcount[5] & ((bramrdaddr == bramwraddr)&&(subrastercount == (`RASTERS_PER_ROW - 1))) ;
+
+    wire getfont;
+    assign getfont = (subrastercount < `RASTERS_PER_FONT) ?
+                            font(bramdataout,hpixelcount[2:0],subrastercount[2:0]) :
+                            0;
 
     always @(negedge clk) begin
 
@@ -433,21 +442,22 @@ module textmode_80x60 (
             /////////////////
             if (!out_axis_tvalid || out_axis_tready) begin
 
-                color_index <= iscursor ^ font(bramdataout,hpixelcount[2:0],rastercount[2:0]) ? 10 : 0;
+                color_index <= iscursor ^ getfont ? 10 : 0;
 
                 if (hpixelcount == 639) begin
 
                     hpixelcount <= 0;
-                    rastercount <= rastercount + 1;
-
-                    if (subrastercount == 7) begin
+                    
+                    if (subrastercount == (`RASTERS_PER_ROW - 1)) begin
                         
-                        if (memlinebase < (80*59))
-                            memlinebase <= memlinebase + 80;
+                        if (memlinebase < (`TEXT_COLS*(`TEXT_ROWS - 1)))
+                            memlinebase <= memlinebase + `TEXT_COLS;
                         else
                             memlinebase <= 0;
+                        subrastercount <= 0;
                     end
-                    subrastercount <= subrastercount + 1;
+                    else    
+                        subrastercount <= subrastercount + 1;
                 end
                 else
                     hpixelcount <= hpixelcount + 1;
@@ -456,7 +466,6 @@ module textmode_80x60 (
                 begin
                     cursorcount = cursorcount + 1;
                     color_index <= 0;
-                    rastercount <= 0;
                     subrastercount <= 0;
                     hpixelcount <= 0;
                     memlinebase <= screenbase;
