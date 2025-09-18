@@ -53,14 +53,56 @@ timecount	.equ RAMTOP-2
 
 PORTLEDS	.equ 0x00
 
-PORT8259_A00	.equ 0x30
-PORT8259_A01	.equ 0x31
 
-PORT8251_DATA	.equ 0x20
-PORT8251_CTRL	.equ 0x21
+; FPGA addr mapping (base 0x50)
+; 0000: Video RAM Data (R/W)
+; 0001: Video ADDR Low (W)
+; 0010: Video ADDR High (W)
+; 0011: Video control (W)
+; 0100: Timer Status & Control(R/W)
+; 0101: PS/2 RX Data (R)
+; 0110: Sound REG Index (W)
+; 0111: Sound REG Data (W)
+; 1000: Serial Status & Control (R/W)
+; 1001: Serial Data RX/TX (R/W)
+; 1010
+; 1011
+; 1100
+; 1101
+; 1110
+; 1111: Status Reg (R)
+
+; FPGA
+;   VIDEO
+PORTDATA	.equ	0x50	; Video ports
+PORTADDRL	.equ	0x51
+PORTADDRH	.equ	0x52
+PORTMODE	.equ	0x53
+
+; TIMER STATUS/CONTROL
+PORTTIMER	.equ	0x54
+
+;   PS2 KEYBOARD
+PORTKEY		.equ	0x55
+
+; AUDIO
+PORTAYADDR	.equ	0x56
+PORTAYDATA	.equ	0x57
+
+; SERIAL
+PORTSERSTATUS	.equ	0x58
+PORTSERCTL	.equ	0x58
+	PORTSER_EN	.equ	2
+	PORTSER_RTSON	.equ	1
+	PORTSER_DIS	.equ	0
+	PORTSER_RTSOFF	.equ	0
+
+PORTSERDATA	.equ	0x59
+
+;   FPGA STATUS
+PORTFPGASTATUS	.equ	0x5F
 
 	.module crt0
-	;.globl	_main
 
 	.area	_HEADER (ABS)
 	;; Reset vector
@@ -71,13 +113,11 @@ PORT8251_CTRL	.equ 0x21
 	jp	tx_char	;reti
 	
 	.org	0x10
-	jp	get_char ;reti
+	jp	rx_char ;reti
 	
 	.org	0x18
-	ld	a,(bufrxqty)
-	or	a
-	ret
-	
+	jp	has_rxchar ;reti
+
 	.org	0x20
 	reti
 	.org	0x28
@@ -86,70 +126,119 @@ PORT8251_CTRL	.equ 0x21
 	reti
 
 	;///////////////////////////////////////////////////////////////////////
-	.org	0x38	; Used by 8259A
+	;//////////////////////////   ISR DISPATCH   ///////////////////////////
+	;///////////////////////////////////////////////////////////////////////
+	.org	0x38
 
-	push	af
+fpga_isr:	push	af
+		push	hl
 
-next_poll:
-	ld	a,#0b00001100	;OCW3_8259
-	;             || | ``----> No register command
-	;             || `-------> Poll command
-	;             ``---------> No Special Mask command
-	out	(PORT8259_A00),a
+fpga_isrloop:	in	a,(PORTFPGASTATUS)
+		and	#0x07
+		jr	z,fpga_isrend
 
-	in	a,(PORT8259_A00)	;Read int status
-	bit	7,a
-	jr	z,end38
+		bit	0,a			; Has PS/2 interrupt?
+		jr	z,fpga_isr1		; No
 
-	and	#0x07
+		ld	hl,#fpga_isr1
+		push	hl
+		ld	hl,(isr1vector)
+		jp	(hl)
 
-	or	a
-	jr	z,isr0			;RX RDY
-	jr	testisr2
+fpga_isr1:	in	a,(PORTFPGASTATUS)	; Has timer interrupt?
+		bit	1,a			; No
+		jr	z,fpga_isr2
 
-isr0:	push	hl			;TIMER
-	ld	hl,#isrpopret
-	push	hl
-	ld	hl,(isr0vector)
-	jp	(hl)
+		in	a,(PORTTIMER)		; Timer EOI
+		ld	hl,#fpga_isr2
+		push	hl
+		ld	hl,(isr2vector)
+		jp	(hl)
 
-testisr2:
-	cp	#2
-	jr	nz,do_eoi
+fpga_isr2:	in	a,(PORTFPGASTATUS)	; Has Serial RX interrupt?
+		bit	2,a			; No
+		jr	z,fpga_isrloop
 
-isr2:	push	hl			;TIMER
-	ld	hl,#isrpopret
-	push	hl
-	ld	hl,(isr2vector)
-	jp	(hl)
+	;;;;	in	a,(PORTSERDATA)
+		ld	hl,#fpga_isrloop
+		push	hl
+		ld	hl,(isr0vector)
+		jp	(hl)
 
-isrpopret:
-	pop	hl
-
-do_eoi:
-	ld	a,#0b00100000	;OCW2_8259
-	;            |||  ```----> Lvl 0 (don't care)
-	;            ```---------> Non Specific EOI
-	out	(PORT8259_A00),a
-
-	jr	next_poll		; Check other pending INTs, if ever
-
-end38:
-	pop	af
-	ei
-	reti
+fpga_isrend:	pop	hl
+		pop	af
+		ei
+		reti
 
 	;///////////////////////////////////////////////////////////////////////
-	.org	0x100
+
+
+timer_isr:
+		ld	a,(timecount)
+		inc	a
+		ld	(timecount),a
+		;out	(PORTLEDS),a
+		ret
+
+
+ps2_isr:
+		in	a,(PORTKEY)
+		ret
+
+rx_isr:		ld	a,(bufrxqty)
+		cp	#BUFRXSIZE
+		jr	nz,rx_isr1
+		in	a,(PORTSERDATA)
+		ret
+	
+rx_isr1:	inc	a
+		cp	#(BUFRXSIZE-16)
+		jr	nz,rx_isr1a
+	
+		push	af
+		ld	a,#(PORTSER_EN|PORTSER_RTSOFF)
+		out	(PORTSERCTL),a
+		pop	af
+
+rx_isr1a:	ld	(bufrxqty),a
+		ld	a,(bufrxins)
+		push	bc
+		ld	c,a
+		ld	b,#0
+		push	hl
+		ld	hl,#bufrx
+		add	hl,bc
+		in	a,(PORTSERDATA)
+		ld	(hl),a
+		pop	hl
+		ld	a,c
+		pop	bc
+
+		inc	a
+		cp	#BUFRXSIZE
+		jr	c,rx_isr2
+		xor	a
+
+rx_isr2:	ld	(bufrxins),a
+
+		ret
+
+	;///////////////////////////////////////////////////////////////////////
+	;////////////////////////   INITIALIZATION   ///////////////////////////
+	;///////////////////////////////////////////////////////////////////////
+
+.org	0x100
 init:
 	;; Stack at the top of memory.
 	ld	sp,#STACKTOP
-	ld	hl,#default_isr
-	ld	(isr1vector),hl
+
 	ld	hl,#rx_isr
 	ld	(isr0vector),hl
+	ld	hl,#ps2_isr
+	ld	(isr1vector),hl
 	ld	hl,#timer_isr
 	ld	(isr2vector),hl
+
 	ld	a,#0xf0
 	ld	(timecount),a
 
@@ -158,45 +247,11 @@ init:
 	ld	(bufrxget),a
 	ld	(bufrxqty),a
 
-	;; Initialize 8251
-	;out	(PORT8251_CTRL),a
-
-	ld	a,#0b01001110		;Mode config
-	;            ||||||``----> Async 16X
-	;            ||||``------> Char length 8 bits
-	;            |||`--------> Parity disabled
-	;            ||`---------> Parity odd (unused)
-	;            ``----------> 1 Stop bit
-	out	(PORT8251_CTRL),a
-
-	ld	a,#0b00110101
-	;            |||||||`----> Transmit enable
-	;            ||||||`-----> Don't set DTR
-	;            |||||`------> Receive enable
-	;            ||||`-------> Don't send Break
-	;            |||`--------> Error reset
-	;            ||`---------> Set RTS
-	;            |`----------> No Reset CMD
-	;            `-----------> No Hunt Mode
-	out	(PORT8251_CTRL),a
-	
-	;; Initialize 8259
-	ld	a,#0b00010110	;ICW1_8259
-	;            |||||||`----> ICW4 not needed
-	;            ||||||`-----> Single chip
-	;            |||||`------> Call Interval 4
-	;            ||||`-------> Edge trigger
-	;            |||`--------> ICW1 marker
-	;            ```---------> A7A6A5 = 000 -> base=0x0000 (not used, we'll use IM1)
-	out	(PORT8259_A00),a
-
-	ld	a,#0b00000000	;ICW2_8259
-	;            ````````----> A15-A8 = 0 (not used, we'll use IM1)
-	out	(PORT8259_A01),a
-	
-	ld	a,#0b00000000	;ICW3_8259
-	;            ````````----> No input have slaves
-	out	(PORT8259_A01),a
+	;; Initialize FPGA: Timer & Serial
+	ld	a,#1
+	out	(PORTTIMER),a
+	ld	a,#(PORTSER_EN|PORTSER_RTSON)
+	out	(PORTSERCTL),a	; Enable RTS & INT RX
 
 	im	1
 	ei
@@ -218,106 +273,50 @@ prints:
 	ld	a,(hl)
 	or	a
 	ret	z
-	call	tx_char
+	push	hl
+	rst	#0x08
+	pop	hl
 	inc	hl
 	jr	prints
 
 	;///////////////////////////////////////////////////////////////////////
 tx_char:
-        di
-	out	(PORT8251_DATA),a
+        ;di
+	out	(PORTSERDATA),a
 wait_tx:
-	in	a,(PORT8251_CTRL)
-	bit	0,a
-	jr	z,wait_tx
-	ei
+	in	a,(PORTSERSTATUS)
+	bit	1,a
+	jr	nz,wait_tx
+	;ei
 	ret
 
 	;///////////////////////////////////////////////////////////////////////
-timer_isr:
-	ld	a,(timecount)
-	inc	a
-	ld	(timecount),a
-	ret
-
-	;///////////////////////////////////////////////////////////////////////
-rx_isr:
+has_rxchar:
 	ld	a,(bufrxqty)
-	cp	#BUFRXSIZE
-	jr	nz,rx_isr1
-	in	a,(PORT8251_DATA)
-	ret
-	
-rx_isr1:
-	inc	a
-	cp	#(BUFRXSIZE-16)
-	jr	nz,rx_isr1a
-	
-	push	af
-	ld	a,#0b00000101
-	;            |||||||`----> Transmit enable
-	;            ||||||`-----> Don't set DTR
-	;            |||||`------> Receive enable
-	;            ||||`-------> Don't send Break
-	;            |||`--------> No error reset
-	;            ||`---------> Clear RTS
-	;            |`----------> No Reset CMD
-	;            `-----------> No Hunt Mode
-	out	(PORT8251_CTRL),a
-	pop	af
-	
-rx_isr1a:	
-	ld	(bufrxqty),a
-	ld	a,(bufrxins)
-	push	bc
-	ld	c,a
-	ld	b,#0
-	ld	hl,#bufrx
-	add	hl,bc
-	in	a,(PORT8251_DATA)
-	ld	(hl),a
-	ld	a,c
-	pop	bc
-
-	inc	a
-	cp	#BUFRXSIZE
-	jr	c,rx_isr2
-	xor	a
-
-rx_isr2:
-	ld	(bufrxins),a
+	or	a
 
 default_isr:
 	ret
 
 	;///////////////////////////////////////////////////////////////////////
-get_char:
-	di
+rx_char:
 	ld	a,(bufrxqty)
 	or	a
-	jr	nz,get_char0
-	ei
+	jr	nz,rx_char0
 	ret		;; No char available, return Z
 
-get_char0:
+rx_char0:
+	di
+	ld	a,(bufrxqty)
 	dec	a
 	ld	(bufrxqty),a
-
 	cp	#8
-	jr	nz,get_char2
+	jr	nz,rx_char2
 
-	ld	a,#0b00100101
-	;            |||||||`----> Transmit enable
-	;            ||||||`-----> Don't set DTR
-	;            |||||`------> Receive enable
-	;            ||||`-------> Don't send Break
-	;            |||`--------> No error reset
-	;            ||`---------> Set RTS
-	;            |`----------> No Reset CMD
-	;            `-----------> No Hunt Mode
-	out	(PORT8251_CTRL),a
+	ld	a,#(PORTSER_EN|PORTSER_RTSON)
+	out	(PORTSERCTL),a	; Enable RTS & INT RX
 
-get_char2:
+rx_char2:
 	push	hl
 
 	push	bc
@@ -330,17 +329,15 @@ get_char2:
 
 	inc	a
 	cp	#BUFRXSIZE
-	jr	nz,get_char1	;; Condition NZ
+	jr	nz,rx_char1	;; Condition NZ
 
 	xor	a
 	cp	#1		;; Force condition NZ
 
-get_char1:
+rx_char1:
 	ld	(bufrxget),a
-	
 	ld	a,(hl)
 	pop	hl
-
 	ei
 	ret			;; Always return NZ
 

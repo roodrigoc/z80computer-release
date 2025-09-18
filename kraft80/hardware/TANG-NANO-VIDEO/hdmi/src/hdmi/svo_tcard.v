@@ -89,6 +89,9 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
 
     reg videomode;
 
+    reg [7:0] screenbasereg;
+    reg [12:0] screenbase;
+
     initial begin
         got_wr = 0;
         got_rd = 0;
@@ -118,6 +121,8 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
         cga_r[13] = 4'hf; cga_g[13] = 4'h0; cga_b[13] = 4'hf;   // LIGHT MAGENTA
         cga_r[14] = 4'hf; cga_g[14] = 4'hf; cga_b[14] = 4'h0;   // YELLOW
         cga_r[15] = 4'hf; cga_g[15] = 4'hf; cga_b[15] = 4'hf;   // WHITE
+
+        screenbase = 0;
     end
 
     wire cpuwrite;
@@ -135,9 +140,10 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
 
     always @(negedge cpuclk) begin
 
-		if (!resetn) begin
+		if (!nrst) begin
             bram_aclock <= 0;
             bram_lock <= 0;
+            screenbase = 0;
         end
         else begin
 
@@ -155,7 +161,6 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
                 else
                 regled[3] <= 0;
 
-
             if (!nrst) begin
                 got_wr = 0;
                 got_rd = 0;
@@ -168,7 +173,16 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
                             0: begin bramdatain <= data; wstate <= 1; end
                             1: begin cled5 <= 800000; bramwraddr[7:0] <= data; end
                             2: begin cled4 <= 800000; bramwraddr[15:8] <= data; wstate <= 6; end
-                            3: if (data[7:4] == 0) begin videomode = data[0]; bramdatain <= 0; bramwraddr <= 0; bram_awrite <= 1; wstate <= 10; end
+                            3:
+// DATA
+// 0000---x : select videmode in x
+// 0001xxxx : select starting line [3:0] in xxxx
+// 0010xxxx : select starting line [7:4] in xxxx
+                                case(data[7:4])
+                                    0: begin videomode = data[0]; bramdatain <= 0; bramwraddr <= 0; bram_awrite <= 1; wstate <= 10; end
+                                    1: screenbasereg[3:0] = data[3:0];
+                                    2: begin screenbasereg[7:4] = data[3:0]; screenbase = 80*screenbasereg; end
+                                endcase
                             default: cled3 <= 800000;
                         endcase
 
@@ -259,7 +273,9 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
                               .resetn(resetn),
                               .bramrdaddr(bramrdaddr_mode0),
                               .bramdataout(bramdataout),
-                              .bramwraddr(bramwraddr));
+                              .bramwraddr(bramwraddr),
+                              .bram_lock(bram_lock),
+                              .screenbase(screenbase));
 
     graphmode_320x240_4bpp grmode1 ( .pixelcount(pixelcount),
                                      .color_index(color_index_mode1),
@@ -268,7 +284,9 @@ module svo_tcard #( `SVO_DEFAULT_PARAMS ) (
                                      .out_axis_tready(out_axis_tready),
                                      .resetn(resetn),
                                      .bramrdaddr(bramrdaddr_mode1),
-                                     .bramdataout(bramdataout) );
+                                     .bramdataout(bramdataout),
+                                     .bram_lock(bram_lock),
+                                     .bramwraddr(bramwraddr));
 
     //wire[15:0] bramrdaddr;
 
@@ -307,7 +325,9 @@ module graphmode_320x240_4bpp (
     input out_axis_tready,
     input resetn,
     output [15:0] bramrdaddr,
-    input [7:0] bramdataout
+    input [7:0] bramdataout,
+    input bram_lock,
+    input[15:0] bramwraddr
 );
 
     reg [16:0] memcounth;
@@ -319,8 +339,8 @@ module graphmode_320x240_4bpp (
     wire[16:0] memrdpos;
     assign memrdpos = memcounth + memcountl;
 
-    assign bramrdaddr = memrdpos;//bram_lock & (bramwraddr == memrdpos) ? 38400 : memrdpos;
-
+    assign bramrdaddr = bram_lock & (bramwraddr == memrdpos) ? 38400 : memrdpos;
+    //assign bramrdaddr = memrdpos;
     always @(negedge clk) begin
 
 		if (!resetn) begin
@@ -375,7 +395,9 @@ module textmode_80x60 (
     input resetn,
     output [15:0] bramrdaddr,
     input [7:0] bramdataout,
-    input [15:0] bramwraddr
+    input [15:0] bramwraddr,
+    input bram_lock,
+    input[12:0] screenbase
 );
 
 	// --------------------------------------------------------------
@@ -395,12 +417,12 @@ module textmode_80x60 (
     wire[16:0] memrdpos;
     assign memrdpos = (hpixelcount >> 3) + memlinebase;
 
-    assign bramrdaddr = memrdpos;//bram_lock & (bramwraddr == memrdpos) ? 38400 : memrdpos;
+    assign bramrdaddr = bram_lock & (bramwraddr == memrdpos) ? 38400 : memrdpos;
+    //assign bramrdaddr = memrdpos;
 
     reg[5:0] cursorcount;
     wire iscursor;
     assign iscursor = cursorcount[5] & ((bramrdaddr == bramwraddr)&&(subrastercount == 7)) ;
-
 
     always @(negedge clk) begin
 
@@ -418,8 +440,13 @@ module textmode_80x60 (
                     hpixelcount <= 0;
                     rastercount <= rastercount + 1;
 
-                    if (subrastercount == 7)
-                        memlinebase <= memlinebase + 80;
+                    if (subrastercount == 7) begin
+                        
+                        if (memlinebase < (80*59))
+                            memlinebase <= memlinebase + 80;
+                        else
+                            memlinebase <= 0;
+                    end
                     subrastercount <= subrastercount + 1;
                 end
                 else
@@ -432,7 +459,7 @@ module textmode_80x60 (
                     rastercount <= 0;
                     subrastercount <= 0;
                     hpixelcount <= 0;
-                    memlinebase <= 0;
+                    memlinebase <= screenbase;
                 end
             end
         end

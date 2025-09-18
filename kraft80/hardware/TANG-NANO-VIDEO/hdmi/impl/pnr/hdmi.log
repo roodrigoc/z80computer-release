@@ -11,7 +11,6 @@ WARN  (TA1132) :  'cpuclk' was determined to be a clock but was not created.
 WARN  (TA1132) :  'test1/wng1/fsr_clk' was determined to be a clock but was not created.
 WARN  (TA1132) :  'svo_hdmi_inst/svo_tcard/bram_aclock' was determined to be a clock but was not created.
 WARN  (TA1132) :  'u_div_5/clkdiv_inst/CLKOUT.default_gen_clk' was determined to be a clock but was not created.
-WARN  (TA1117) : Can't calculate clocks' relationship between: "u_div_5/clkdiv_inst/CLKOUT.default_gen_clk" and "cpuclk"
 WARN  (TA1117) : Can't calculate clocks' relationship between: "cpuclk" and "u_div_5/clkdiv_inst/CLKOUT.default_gen_clk"
 [50%] Placement Phase 3 completed
 Running routing......
@@ -32,5 +31,5 @@ Generate file "Z:\hdmi\impl\pnr\hdmi.pin.html" completed
 Generate file "Z:\hdmi\impl\pnr\hdmi.rpt.html" completed
 Generate file "Z:\hdmi\impl\pnr\hdmi.rpt.txt" completed
 Generate file "Z:\hdmi\impl\pnr\hdmi.tr.html" completed
-Fri Sep 12 17:32:32 2025
+Thu Sep 18 14:59:42 2025
 

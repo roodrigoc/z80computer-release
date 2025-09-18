@@ -52,25 +52,26 @@ bufrxqty	.equ bufrxget+1		;0x4192
 
 VIDROWS		.equ	60
 VIDCOLS		.equ	80
-VIDBUFSZ	.equ	VIDCOLS	;(VIDCOLS/4)
 vidrow		.equ bufrxqty+1		;0x4193
 vidcol		.equ vidrow+1		;0x4194
 vidptr		.equ vidcol+1		;0x4195
-vidbuf		.equ vidptr+2		;0x4197
+
+scrollcnt	.equ vidptr+2		;0x4197
+lastlineptr	.equ scrollcnt+1	;0x4198
+bufkey		.equ lastlineptr+2	;0x419a
 BUFKEYSIZE	.equ	8
-bufkey		.equ vidbuf+VIDBUFSZ	;0x41e7		
-bufkeyqty	.equ bufkey+BUFKEYSIZE	;0x41ef
-bufkeyins	.equ bufkeyqty+1	;0x41f0
-bufkeyget	.equ bufkeyins+1	;0x41f1
-kflags		.equ bufkeyget+1	;0x41f2	;00xxxxxx
+bufkeyqty	.equ bufkey+BUFKEYSIZE	;0x41a2
+bufkeyins	.equ bufkeyqty+1	;0x41a3
+bufkeyget	.equ bufkeyins+1	;0x41a4
+kflags		.equ bufkeyget+1	;0x41a5	;00xxxxxx
 						;  |||||`-- LShift
 						;  ||||`--- RShift
 						;  |||`---- Caps
 						;  ||`----- Break Code Indicator
 						;  |`------ LCTRL  
 						;  `------- RCTRL (reserved)   
-lastkey		.equ kflags+1		;0x41f3
-sysflag		.equ lastkey+1		;0x41f4
+lastkey		.equ kflags+1		;0x41a6
+sysflag		.equ lastkey+1		;0x41a7
 
 __varend__	.equ lastkey+1
 
@@ -364,6 +365,10 @@ wait1:	dec	hl
 	jr	nz,wait1
 	
 	; Init CRT Video
+	ld	a,#0x10		;Reset scroller
+	out	(PORTMODE),a
+	ld	a,#0x20
+	out	(PORTMODE),a
 	xor 	a
 	out	(PORTADDRL),a
 	out	(PORTADDRH),a
@@ -371,6 +376,9 @@ wait1:	dec	hl
 	ld	(vidcol),a
 	ld	(vidptr),a
 	ld	(vidptr+1),a
+	ld	(scrollcnt),a
+	ld	hl,#((VIDROWS-1)*VIDCOLS)
+	ld	(lastlineptr),hl
 
 	ld	hl,#signon
 	call	prints
@@ -581,14 +589,23 @@ putlf2:	ld	(vidptr),hl
 	
 putlf1:	jp	scroll_crt
 
-putclr: xor	a
+putclr:
+	ld	a,#0x10		;Reset scroller
+	out	(PORTMODE),a
+	ld	a,#0x20
+	out	(PORTMODE),a
+
+	xor	a
+	ld	(scrollcnt),a
 	ld	(vidrow),a
 	ld	(vidcol),a
 	ld	(vidptr),a
 	ld	(vidptr+1),a
 	out	(PORTADDRL),a
 	out	(PORTADDRH),a
-	
+	ld	hl,#((VIDROWS-1)*VIDCOLS)
+	ld	(lastlineptr),hl
+
 	ld	hl,#(VIDCOLS*VIDROWS)
 putclr1:xor	a
 	out	(PORTDATA),a
@@ -605,67 +622,67 @@ putclr1:xor	a
 scroll_crt:
 	push	bc
 	push	de
-	
-	ld	c,#(VIDROWS-1)
-	ld	hl,#VIDCOLS
-
-scroll_screen:
-	;ld	b,#(VIDCOLS/VIDBUFSZ)
-
-;scroll_1line:
-	push	bc
-	ld	a,l
-	out	(PORTADDRL),a
-	ld	a,h
-	out	(PORTADDRH),a
 	push	hl
-	ld	hl,#vidbuf
-	ld	b,#VIDBUFSZ
-	ld	c,#PORTDATA
-	inir
-	pop	hl
 
-	push	hl
-	
-	ld	de,#-VIDCOLS
-	add	hl,de
-	ld	a,l
-	out	(PORTADDRL),a
+	ld	a,(scrollcnt)
+	inc	a
+	cp	#VIDROWS
+	jr	c,scroll_crt0a
+
+	xor	a
+
+scroll_crt0a:
+	ld	(scrollcnt),a
+	ld	b,a
+	and	#0x0f
+	or	#0x10
+	out	(PORTMODE),a
+	ld	a,b
+	srl	a
+	srl	a
+	srl	a
+	srl	a
+	or	#0x20
+	out	(PORTMODE),a
+
+	ld	hl,(lastlineptr)
+	ld	de,#((VIDROWS-1)*VIDCOLS)
+	scf
+	ccf
+	sbc	hl,de
 	ld	a,h
-	out	(PORTADDRH),a
-	ld	hl,#vidbuf
-	ld	b,#VIDBUFSZ
-	;ld	c,#PORTDATA
-	otir
-	
-	pop	hl
+	or	l
+	jr	z,scroll_crt0b
+	ld	hl,(lastlineptr)
 	ld	de,#VIDCOLS
 	add	hl,de
 
-	pop	bc
-	;djnz	scroll_1line
-
-	dec	c
-	jr	nz,scroll_screen
-
-	ld	hl,#((VIDROWS-1)*VIDCOLS)
+scroll_crt0b:
+	ld	(lastlineptr),hl
+	;ld	hl,(lastlineptr)
 	ld	a,l
 	out	(PORTADDRL),a
 	ld	a,h
 	out	(PORTADDRH),a
 	xor	a
 	ld	b,#VIDCOLS
-
 scroll3:
 	out	(PORTDATA),a
 	djnz	scroll3
 
-	ld	hl,(vidptr)
+	ld	a,(vidcol)
+	ld	e,a
+	ld	d,#0
+	ld	hl,(lastlineptr)
+	add	hl,de
+
+	ld	(vidptr),hl
 	ld	a,l
 	out	(PORTADDRL),a
 	ld	a,h
 	out	(PORTADDRH),a
 
+	pop	hl
 	pop	de
 	pop	bc
 	ret
