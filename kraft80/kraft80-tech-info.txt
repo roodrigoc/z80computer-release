@@ -1,0 +1,360 @@
+================================================================================
+KRAFT80 TECHNICAL INFO
+Revision 1.0.0 - 2025-09-18
+© 2025, ARMCoder
+
+================================================================================
+1. MAIN FEATURES
+
+
+  CPU:   Z80A, 4 MHz
+
+  ROM BIOS + Monitor:  8 kbytes
+  ROM BASIC: 8 kbytes
+
+  RAM:   16 kbytes (disabled at boot) + 48 kbytes (the lower RAM can be remapped
+         over the ROMs, yielding the full 64 kbytes ready for use)
+
+  VIDEO: Text Mode: 80x48 - Monochrome
+         Graphics Mode: 320x240 Framebuffer - 16 Color
+
+  KEYBOARD: PS/2 compatible
+
+  SOUND: Mono, compatible with PSG AY3-891x
+
+  TIMER Interrupt: Fixed, 300 Hz
+
+  SERIAL: USB 19200 BPS, 8N1, RTS Flow control (via FTDI - USB chip)
+
+  MICRO SD CARD CONTROLLER: Software still WIP, hardware already tested
+
+  POWER: 5V 1A (via USB, the same of the FTDI above)
+
+  EXTRA IOS:
+    LCD Alphanumeric 16x2
+    8 Pushbuttons
+    8 Controllable LEDs
+
+================================================================================
+2. MEMORY MAP
+
+
+        +------------------+ 0000H
+        |                  |
+        |  BIOS + SYSMON   |
+        |   8 KBytes ROM   |
+        |                  |
+        +------------------+ 2000H
+        |                  |
+        |  MS BASIC 4.7B   |
+        |   8 KBytes ROM   |
+        |                  |
+        +------------------+ 4000H
+        |                  |
+        |                  |
+        |                  |
+        |                  |
+        |                  |
+        |   48 KBytes RAM  |
+        |                  |
+        |                  |
+        |                  |
+        |                  |
+        |                  |
+        +------------------+ FFFFH
+
+================================================================================
+3. I/O PORT MAPPING
+
+
+PORT       FUNCTION
+
+0x00       8 CONTROLLABLE LEDS (write)
+
+0x00       8 PUSHBUTTONS (read)
+
+0x10       LCD 16x2 (write)
+
+0x40       AUX FLIPFLOP (write)
+
+0x50~0x5F  FPGA MODULE, as below:
+           0x50: Video RAM Data (R/W)
+           0x51: Video ADDR Low (W)
+           0x52: Video ADDR High (W)
+           0x53: Video control (W)
+           0x54: Timer Status & Control(R/W)
+           0x55: PS/2 Keyboard RX Data (R)
+           0x56: PSG (Sound) REG Index (W)
+           0x57: PSG (Sound) REG Data (W)
+           0x58: Serial Status & Control (R/W)
+           0x59: Serial Data RX/TX (R/W)
+           0x5A: SPI Status & Control(R/W)
+           0x5B: SPI Data RX/TX (R/W)
+           0x5C: Unused
+           0x5D: Unused
+           0x5E: Unused
+           0x5F: FPGA Status Reg (R)
+
+================================================================================
+4. BIOS SERVICES
+
+
+4.1. STDIN, STDOUT
+==================
+
+NAME: PUTCHAR
+
+DESC: Prints a character on Text VGA screen or serial terminal.
+
+HOW TO USE: Load register A with the character and exec RST 0x08.
+
+RETURNS: Nothing
+
+AFFECTS: A, Flags
+
+
+
+NAME: GETCHAR
+
+DESC: Reads a character from PS/2 Keyboard or serial terminal.
+
+HOW TO USE: Exec RST 0x10.
+
+RETURNS: Character in A, flag NZ, if valid character, flag Z otherwise.
+
+AFFECTS: A, Flags
+
+
+
+NAME: HASCHAR
+
+DESC: Checks whether there's a character available from PS/2 Keyboard or serial
+      terminal.
+
+HOW TO USE: Exec RST 0x18.
+
+RETURNS: Flag NZ if available, flag Z otherwise.
+
+AFFECTS: A, Flags
+
+
+4.2. SERIAL LINE
+================
+
+NAME: SERIAL_TX
+
+DESC: Sends a character over the serial line.
+
+HOW TO USE: Load register C=1, and A with the character and exec RST 0x20.
+
+RETURNS: Nothing
+
+AFFECTS: A, Flags
+
+
+
+NAME: SERIAL_RX
+
+DESC: Reads a character from the serial line.
+
+HOW TO USE: Load register C=4, and exec RST 0x20.
+
+RETURNS: Character in A, flag NZ, if valid character, flag Z otherwise.
+
+AFFECTS: A, Flags
+
+
+
+NAME: SERIAL_RX_AVAIL
+
+DESC: Checks whether there's a character available from the serial line.
+
+HOW TO USE: Load register C=2, and exec RST 0x20.
+
+RETURNS: Flag NZ if available, flag Z otherwise.
+
+AFFECTS: A, Flags
+
+
+================================================================================
+5. THE SYSMON
+
+  Sysmon is a small program that allows the control of the Kraft80. It is the
+first prompt shell the user encounters when the Kraft80 is powered up.
+
+  All addresses and data are shown in Hex, and must be also typed in Hex.
+
+  Sysmon has the following commands available at prompt: Edit Memory, Display 
+Memory, Go to Location, Load XModem and Start ROM-BASIC. Let's see all of them
+now.
+
+5.1. EDIT MEMORY
+================
+
+  Type 'e' followed by an optional address, and ENTER. For now, we will not
+use an address value.
+
+  Type:
+
+	:e [ENTER]
+
+  Sysmon will display the next memory address to be edited (default is
+4200H).
+
+        4200:_
+
+  You may type your little program, for example:
+
+        4200:3e aa d3 00 c9_
+
+  Pressing ENTER will commit the values typed and show the next address to be
+edites:
+
+        4205:_
+
+  Just press ENTER with no values to finish editing.
+
+  Note: Sysmon "remembers" the last edited address and if you command 'e'
+without passing an address value, it will again present the position 4205H for
+editing. You can choose a different address in the command, typing, for example,
+"e 4800" to edit the memory located at 4800H.
+
+
+5.2. DISPLAY MEMORY
+===================
+
+  Type 'd' followed by an optional address, and ENTER. For now, we will not
+use an address value.
+
+  Type:
+
+	:d [ENTER]
+
+  Sysmon will display 128 bytes of memory. The initial address is by default
+4200H, too.
+
+              0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F             
+        4200:3E AA D3 00 C9 FF FF FF FF FF FF FF FF FF FF FF
+        4210:FF FF FF FF FF 02 80 32 03 80 FB CD 27 42 F3 2A 
+        4220:00 80 22 04 41 FB C9 21 9A 42 7E FE FF C8 47 23 
+        4230:4E 23 FE 10 20 05 CD 43 42 18 EF 78 D3 56 79 D3 
+        4240:57 18 E7 F3 AF 32 03 80 79 32 02 80 FB 3A 02 80 
+        4250:B7 20 FA C9 3A 03 80 FE 04 20 10 3A 02 80 B7 28 
+        4260:05 3D 32 02 80 AF 32 03 80 18 04 3C 32 03 80 2A 
+        4270:00 80 E9 7E B7 C8 CF 23 18 F9 50 6C 61 79 69 6E 
+
+  Note: Sysmon "remembers" the last displayed address and if you command 'd'
+without passing an address value, it will present the dump from position 4280H
+onwards. And 4300H in the following 'd' command, and so on. You can choose a
+different address in the command, typing, for example, "d 4800" to display the
+memory located at 4800H.
+
+
+5.3. GO TO LOCATION
+===================
+
+  The command 'g' makes the CPU to jump (go) to a location. Default is 4200H. As
+you're probably thinking, you can also place an optional address value here.
+
+  The small program you've typed earlier (if you didn't, please do it now) will
+turn on 4 LEDs when executed.
+
+  Type:
+
+        :g [ENTER]
+
+  The message "Go!" will be displayed and the LEDs should turn on.
+
+  If you type:
+
+        :g 2000[ENTER]
+
+  You will start the MS BASIC, that will ask "Memory top?". Just press ENTER
+here. So the BASIC will be started:
+
+        Z80 BASIC Ver 4.7b
+        Copyright (C) 1978 by Microsoft
+        48067 Bytes free
+        Ok
+
+  For now, you can reset the Kraft 80 using the Reset button or cycling its
+power.
+
+
+5.4. LOAD XMODEM
+================
+
+  You can load a large program from the PC to the Kraft80 using the serial line
+and the XModem protocol. In fact, the projects presented here are built so the
+resulting files are meant to be loaded this way.
+
+  In Sysmon, the command is:
+
+        :loadx [ENTER]
+
+  Sysmon will then wait a XModem transfer from the serial line (technically, it
+will send a NAK byte every few seconds to "invite" the sender to begin the
+transfer).
+
+  The sender is a PC with a XModem-compatible transfer application, with the
+settings below:
+
+        19200 BPS
+        8N1
+        RTS/CTS Flow control
+
+  NOTE: The current revision of Sysmon always does the XMODEM load at location
+4200H. Future revisions may support the option to choose different addresses.
+
+  NOTE 2: The current revision of Sysmon has no support of "exporting" back data
+over XModem (yet). This may change in future revisions.
+
+
+5.5. START ROM-BASIC
+====================
+
+  You may use the command "g 2000" to invoke the ROM-BASIC as shown above, but
+to make things more practical, there's the command "basic" that does the same.
+
+        :basic [ENTER]
+
+        Memory top? [ENTER]
+        Z80 BASIC Ver 4.7b
+        Copyright (C) 1978 by Microsoft
+        48067 Bytes free
+        Ok
+
+
+5.6. START-UP: VGA+PS2 VS SERIAL TERMINAL
+=========================================
+
+  By default, Sysmon uses the PS/2 keyboard and the VGA monitor as user
+interfaces. This is the "normal", the intended mode for Sysmon to work.
+
+  However, you may find yourself lacking a PS/2 keyboard (this item is becoming
+increasingly rare) or maybe a spare monitor.
+
+  There's an option to boot up the Kraft 80 in Serial Terminal mode. As you 
+press the Reset button, also press and hold the button SW8. Now all the user I/O
+will be done by the USB-Serial interface, as below:
+
+        19200 BPS
+        8N1
+        RTS/CTS Flow control
+
+  No data will be shown in the VGA monitor, and the PS/2 keyboard, even if 
+present, will no longer be read.
+
+  The serial line will be shared between user I/O and XModem transfers, but I've
+found no problems at all.
+
+
+6. FINAL CONSIDERATIONS
+=======================
+
+  There are many more info on how the Kraft 80's subsystems work, they will be
+supplied in separate documents.
+
+
+
+
