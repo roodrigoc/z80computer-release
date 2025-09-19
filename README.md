@@ -35,7 +35,7 @@ Characteristics:
   RAM:   16 kbytes (disabled at boot) + 48 kbytes (the lower RAM can be remapped
          over the ROMs, yielding the full 64 kbytes ready for use)
 
-  VIDEO: Text Mode: 80x60 - Monochrome
+  VIDEO: Text Mode: 48 rows x 80 columns - Monochrome
          Graphics Mode: 320x240 Framebuffer - 16 Color
 
   KEYBOARD: PS/2 compatible
