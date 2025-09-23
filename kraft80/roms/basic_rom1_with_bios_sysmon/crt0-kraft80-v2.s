@@ -72,6 +72,7 @@ kflags		.equ bufkeyget+1	;0x41a5	;00xxxxxx
 						;  `------- RCTRL (reserved)   
 lastkey		.equ kflags+1		;0x41a6
 sysflag		.equ lastkey+1		;0x41a7
+dispcol		.equ sysflag+1		;0x41a8
 
 __varend__	.equ lastkey+1
 
@@ -84,6 +85,7 @@ PORTLEDS	.equ 0x00
 ; LEDS & BUTTONS
 PORTLEDS	.equ	0x00
 PORTBUTTONS	.equ	0x00
+PORTDISP	.equ	0x10
 
 ; FPGA addr mapping (base 0x50)
 ; 0000: Video RAM Data (R/W)
@@ -152,7 +154,7 @@ PORTFPGASTATUS	.equ	0x5F
 	jp	mon_haskey
 	
 	.org	0x20
-	jp	serial_fns
+	jp	user_fns
 	.org	0x28
 	reti
 	.org	0x30
@@ -163,124 +165,133 @@ PORTFPGASTATUS	.equ	0x5F
 	;///////////////////////////////////////////////////////////////////////
 	.org	0x38
 
-fpga_isr:	push	af
-		push	hl
+fpga_isr:
+	push	af
+	push	hl
 
-fpga_isrloop:	in	a,(PORTFPGASTATUS)
-		and	#0x07
-		jr	z,fpga_isrend
+fpga_isrloop:
+	in	a,(PORTFPGASTATUS)
+	and	#0x07
+	jr	z,fpga_isrend
 
-		bit	0,a			; Has PS/2 interrupt?
-		jr	z,fpga_isr1		; No
+	bit	0,a			; Has PS/2 interrupt?
+	jr	z,fpga_isr1		; No
 
-		ld	hl,#fpga_isr1
-		push	hl
-		ld	hl,(isr1vector)
-		jp	(hl)
+	ld	hl,#fpga_isr1
+	push	hl
+	ld	hl,(isr1vector)
+	jp	(hl)
 
-fpga_isr1:	in	a,(PORTFPGASTATUS)	; Has timer interrupt?
-		bit	1,a			; No
-		jr	z,fpga_isr2
+fpga_isr1:
+	in	a,(PORTFPGASTATUS)	; Has timer interrupt?
+	bit	1,a			; No
+	jr	z,fpga_isr2
 
-		in	a,(PORTTIMER)		; Timer EOI
-		ld	hl,#fpga_isr2
-		push	hl
-		ld	hl,(isr2vector)
-		jp	(hl)
+	in	a,(PORTTIMER)		; Timer EOI
+	ld	hl,#fpga_isr2
+	push	hl
+	ld	hl,(isr2vector)
+	jp	(hl)
 
-fpga_isr2:	in	a,(PORTFPGASTATUS)	; Has Serial RX interrupt?
-		bit	2,a			; No
-		jr	z,fpga_isrloop
+fpga_isr2:	
+	in	a,(PORTFPGASTATUS)	; Has Serial RX interrupt?
+	bit	2,a			; No
+	jr	z,fpga_isrloop
 
-	;;;;	in	a,(PORTSERDATA)
-		ld	hl,#fpga_isrloop
-		push	hl
-		ld	hl,(isr0vector)
-		jp	(hl)
+	ld	hl,#fpga_isrloop
+	push	hl
+	ld	hl,(isr0vector)
+	jp	(hl)
 
-fpga_isrend:	pop	hl
-		pop	af
-		ei
-		reti
+fpga_isrend:	
+	pop	hl
+	pop	af
+	ei
+	reti
 
 	;///////////////////////////////////////////////////////////////////////
 
 
 timer_isr:
-		ld	a,(timecount)
-		inc	a
-		ld	(timecount),a
-		;out	(PORTLEDS),a
-		ret
+	ld	a,(timecount)
+	inc	a
+	ld	(timecount),a
+	;out	(PORTLEDS),a
+	ret
 
 
 ps2_isr:
-		ld	a,(bufkeyqty)
-		cp	#BUFKEYSIZE
-		jr	nz,key_isr1
-		in	a,(PORTKEY)
-		ret
+	ld	a,(bufkeyqty)
+	cp	#BUFKEYSIZE
+	jr	nz,key_isr1
+	in	a,(PORTKEY)
+	ret
 
-key_isr1:	inc	a
-		ld	(bufkeyqty),a
+key_isr1:	
+	inc	a
+	ld	(bufkeyqty),a
 
-		ld	a,(bufkeyins)
-		push	bc
-		ld	c,a
-		ld	b,#0
-		push	hl
-		ld	hl,#bufkey
-		add	hl,bc
-		in	a,(PORTKEY)	; Read key -> PS/2 EOI
-		ld	(hl),a
-		pop	hl
-		ld	a,c
-		pop	bc
-		inc	a
-		cp	#BUFKEYSIZE
-		jr	c,key_isr2
-		xor	a
-key_isr2:	ld	(bufkeyins),a
-		ret
+	ld	a,(bufkeyins)
+	push	bc
+	ld	c,a
+	ld	b,#0
+	push	hl
+	ld	hl,#bufkey
+	add	hl,bc
+	in	a,(PORTKEY)	; Read key -> PS/2 EOI
+	ld	(hl),a
+	pop	hl
+	ld	a,c
+	pop	bc
+	inc	a
+	cp	#BUFKEYSIZE
+	jr	c,key_isr2
+	xor	a
+key_isr2:	
+	ld	(bufkeyins),a
+	ret
 
-
-rx_isr:		ld	a,(bufrxqty)
-		cp	#BUFRXSIZE
-		jr	nz,rx_isr1
-		in	a,(PORTSERDATA)
-		ret
+rx_isr:		
+	ld	a,(bufrxqty)
+	cp	#BUFRXSIZE
+	jr	nz,rx_isr1
+	in	a,(PORTSERDATA)
+	ret
 	
-rx_isr1:	inc	a
-		cp	#(BUFRXSIZE-16)
-		jr	nz,rx_isr1a
+rx_isr1:	
+	inc	a
+	cp	#(BUFRXSIZE-16)
+	jr	nz,rx_isr1a
 	
-		push	af
-		ld	a,#(PORTSER_EN|PORTSER_RTSOFF)
-		out	(PORTSERCTL),a
-		pop	af
+	push	af
+	ld	a,#(PORTSER_EN|PORTSER_RTSOFF)
+	out	(PORTSERCTL),a
+	pop	af
 
-rx_isr1a:	ld	(bufrxqty),a
-		ld	a,(bufrxins)
-		push	bc
-		ld	c,a
-		ld	b,#0
-		push	hl
-		ld	hl,#bufrx
-		add	hl,bc
-		in	a,(PORTSERDATA)
-		ld	(hl),a
-		pop	hl
-		ld	a,c
-		pop	bc
+rx_isr1a:	
+	ld	(bufrxqty),a
+	ld	a,(bufrxins)
+	push	bc
+	ld	c,a
+	ld	b,#0
+	push	hl
+	ld	hl,#bufrx
+	add	hl,bc
+	in	a,(PORTSERDATA)
+	ld	(hl),a
+	pop	hl
+	ld	a,c
+	pop	bc
 
-		inc	a
-		cp	#BUFRXSIZE
-		jr	c,rx_isr2
-		xor	a
+	inc	a
+	cp	#BUFRXSIZE
+	jr	c,rx_isr2
+	xor	a
 
-rx_isr2:	ld	(bufrxins),a
+rx_isr2:	
+	ld	(bufrxins),a
 
-		ret
+	ret
 
 
 	;///////////////////////////////////////////////////////////////////////
@@ -346,14 +357,13 @@ init:
 	ld	a,#1
 	ld	(sysflag),a
 init1:
-		ld	a,#1
-		out	(PORTTIMER),a
-		ld	a,#(PORTSER_EN|PORTSER_RTSON)
-		out	(PORTSERCTL),a	; Enable RTS & INT RX
+	ld	a,#1
+	out	(PORTTIMER),a
+	ld	a,#(PORTSER_EN|PORTSER_RTSON)
+	out	(PORTSERCTL),a	; Enable RTS & INT RX
 
         ;; Initialise global variables
         call    gsinit
-        
 
 	xor 	a
 	out	(PORTMODE),a
@@ -390,7 +400,16 @@ wait1:	dec	hl
 	in	a,(PORTSERDATA)
 	in	a,(PORTKEY)
 	in	a,(PORTTIMER)
-	
+
+	call	lcd_init
+
+	ld	hl,#msgk1
+	call	lcd_wmsg
+
+	call	lcd_home2
+	ld	hl,#msgk2
+	call	lcd_wmsg
+
 	im	1
 	ei
 
@@ -400,7 +419,10 @@ signon:
 	.db	13,10
 	.ascii	'Kraft 80 - Z80 Computer'
 	.db	13,10,0
-	
+
+msgk1:	.ascii	"Kraft 80\0"
+msgk2:	.ascii	"Z80 Computer\0"
+
 	;///////////////////////////////////////////////////////////////////////
 prints:
 	ld	a,(hl)
@@ -413,20 +435,47 @@ prints:
 	jr	prints
 
 	;///////////////////////////////////////////////////////////////////////
-	;////////////////////   SERIAL (UART) FUNCTIONS   //////////////////////
+	;/////////////////////////   USER FUNCTIONS   //////////////////////////
 	;///////////////////////////////////////////////////////////////////////
 
-serial_fns:
-	bit	0,c		;c = 1: TX CHAR (input in A)
-	jr	nz,tx_char
+user_fns:
+	dec	c
+	jr	z,tx_char	;c = 1: TX CHAR (input in A)
 
-	bit	1,c		;c = 2: HAS RXCHAR (output Z flag)
-	jr	nz,has_rxchar
+	dec	c
+	jr	z,has_rxchar	;c = 2: HAS RXCHAR (output Z flag)
 
-	bit	2,c		;c = 4: RX CHAR (outputs Z flag & A)
-	jr	nz,rx_char
+	dec	c
+	jr	z,rx_char	;c = 3: RX CHAR (outputs Z flag & A)
+
+	dec	c		;c = 4
+	dec	c		;c = 5
+	dec	c		;c = 6
+	dec	c		;c = 7
+
+	dec	c		;c = 8
+	jp	z,lcd_init
+
+	dec	c		;c = 9
+	jp	z,lcd_clear
+
+	dec	c		;c = 10
+	jp	z,lcd_home
+
+	dec	c		;c = 11
+	jp	z,lcd_home2
+
+	dec	c		;c = 12
+	jp	z,lcd_write
+
+	dec	c		;c = 13
+	jp	z,lcd_wmsg
 
 	ret
+
+	;///////////////////////////////////////////////////////////////////////
+	;////////////////////   SERIAL (UART) FUNCTIONS   //////////////////////
+	;///////////////////////////////////////////////////////////////////////
 
 	;///////////////////////////////////////////////////////////////////////
 tx_char:
@@ -460,8 +509,8 @@ rx_char0:
 	cp	#8
 	jr	nz,rx_char2
 
-		ld	a,#(PORTSER_EN|PORTSER_RTSON)
-		out	(PORTSERCTL),a	; Enable RTS & INT RX
+	ld	a,#(PORTSER_EN|PORTSER_RTSON)
+	out	(PORTSERCTL),a	; Enable RTS & INT RX
 
 rx_char2:
 	push	hl
@@ -936,10 +985,213 @@ tab_xlat:
 	.byte	0x51, '/', '?', '/'
 	.byte	0x00
 
-;===============================================================================
+	;///////////////////////////////////////////////////////////////////////
+	;//////////////////////   LCD DISPLAY FUNCTIONS   //////////////////////
+	;///////////////////////////////////////////////////////////////////////
 
+lcd_write:
+	;RS R/W DB7 DB6 DB5 DB4
+	;1   0   D7  D6  D5  D4
+	push	bc
+
+	push	af
+	ld	a,(dispcol)
+	cp	#16
+	jr	nz,lcd_w1
+	call	lcd_home2
+	jr	lcd_w2
+lcd_w1:
+	cp	#32
+	jr	nz,lcd_w2
+	call	lcd_home
+lcd_w2:
+	ld	a,(dispcol)
+	inc	a
+	ld	(dispcol),a
+	pop	af
+	
+	ld	c,a
+	and	#0xf0
+	or	#0x01
+	call	lcd_out
+
+	;RS R/W DB7 DB6 DB5 DB4
+	;1   0   D3  D2  D1  D0
+	ld	a,c		
+	sla	a
+	sla	a
+	sla	a
+	sla	a
+	or	#0x01
+	call	lcd_out
+
+	call	delay_5ms
+
+	pop	bc
+
+	ret
+
+;///////////////////////////////////////////////////////////////////////////////
+lcd_wmsg:
+	ld	a,(hl)
+	or	a
+	ret	z
+	call	lcd_write
+	inc	hl
+	jr	lcd_wmsg
+
+;///////////////////////////////////////////////////////////////////////////////
+lcd_home:
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   0   0
+	ld	a,#0b00000000
+	call	lcd_out
+	;RS R/W DB3 DB2 DB1 DB0
+	;0   0   0   0   1   0
+	ld	a,#0b00100000
+	call	lcd_out
+
+	call	delay_5ms
+	xor a
+	ld (dispcol),a
+	ret
+
+;///////////////////////////////////////////////////////////////////////////////
+lcd_home2:
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   1   1   0   0
+	ld	a,#0b11000000
+	call	lcd_out
+	;RS R/W DB3 DB2 DB1 DB0
+	;0   0   0   0   0   0
+	ld	a,#0b00000000
+	call	lcd_out
+
+	call	delay_5ms
+	ld a,#16
+	ld (dispcol),a
+	ret
+
+;///////////////////////////////////////////////////////////////////////////////
+lcd_clear:
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   0   0
+	ld	a,#0b00000000
+	call	lcd_out
+	;RS R/W DB3 DB2 DB1 DB0
+	;0   0   0   0   0   1
+	ld	a,#0b00010000
+	call	lcd_out
+
+	call	delay_5ms
+	xor a
+	ld (dispcol),a
+	ret
+
+;///////////////////////////////////////////////////////////////////////////////
+lcd_init:
+	call	delay_15ms
+
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   1   1
+	ld	a,#0b00110000
+	call	lcd_out
+	call	delay_5ms
+	ld	a,#0b00110000
+	call	lcd_out
+	call	delay_5ms
+
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   1   0
+	ld	a,#0b00100000		; Set 4 bit mode
+	call	lcd_out
+
+	call	delay_5ms
+
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   1   0
+	ld	a,#0b00100000		; Will set N F
+	call	lcd_out
+	;RS R/W DB3 DB2 DB1 DB0
+	;0   0   N   F   x   x  N=1 F=1
+	ld	a,#0b11000000
+	call	lcd_out
+
+	call	delay_5ms
+
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   0   0
+	ld	a,#0b00000000		; Will turn display on
+	call	lcd_out
+	;RS R/W DB3 DB2 DB1 DB0
+	;0   0   1   1   0   0
+	ld	a,#0b11000000
+	call	lcd_out
+
+	call	delay_5ms
+
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   0   0
+	ld	a,#0b00000000		; Will clear display
+	call	lcd_out
+	;RS R/W DB3 DB2 DB1 DB0
+	;0   0   0   0   0   1
+	ld	a,#0b00010000
+	call	lcd_out
+
+	call	delay_5ms
+
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   0   0
+	ld	a,#0b00000000		; Will set Increment mode
+	call	lcd_out		; No shift
+	;RS R/W DB3 DB2 DB1 DB0
+	;0   0   0   1   1   0
+	ld	a,#0b01100000
+	call	lcd_out
+
+	call	delay_5ms
+
+	call	lcd_home
+	ret
+
+;///////////////////////////////////////////////////////////////////////////////
+lcd_out:
+	out	(PORTDISP),a
+	nop
+	nop
+	set	1,a
+	out	(PORTDISP),a
+	nop
+	nop
+	res	1,a
+	out	(PORTDISP),a
+	ret
+
+;///////////////////////////////////////////////////////////////////////////////
+delay_5ms:
+	ld	bc,#768		; 2.5us
+delay_5ms_a:	
+	dec	bc		; 1.5 us
+	ld	a,b		; 1 us
+	or	c		; 1 us
+	jr	nz,delay_5ms_a	; 3 us
+	ret			; 2.5 us
+
+;///////////////////////////////////////////////////////////////////////////////
+delay_15ms:	
+	ld	bc,#2307	; 2.5us
+delay_15ms_a:	
+	dec	bc		; 1.5 us
+	ld	a,b		; 1 us
+	or	c		; 1 us
+	jr	nz,delay_15ms_a	; 3 us
+	ret			; 2.5 us
 
 	;///////////////////////////////////////////////////////////////////////
+	;///////////////////////////// END OF CODE  ////////////////////////////
+	;///////////////////////////////////////////////////////////////////////
+
 gsinit:
 	ld	bc, #l__INITIALIZER
 	ld	a, b

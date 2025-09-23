@@ -524,7 +524,7 @@ serial_getchar:
 	push	bc
 
 serial_getchar1:
-	ld	c,#4
+	ld	c,#3
 	rst	0x20
 	jr	z,serial_getchar1
 

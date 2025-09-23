@@ -1,6 +1,6 @@
 ================================================================================
 KRAFT80 TECHNICAL INFO
-Revision 1.0.0 - 2025-09-18
+Revision 1.0.1 - 2025-09-22
 © 2025, ARMCoder
 
 ================================================================================
@@ -103,6 +103,7 @@ PORT       FUNCTION
 ==================
 
 NAME: PUTCHAR
+-------------
 
 DESC: Prints a character on Text VGA screen or serial terminal.
 
@@ -115,6 +116,7 @@ AFFECTS: A, Flags
 
 
 NAME: GETCHAR
+-------------
 
 DESC: Reads a character from PS/2 Keyboard or serial terminal.
 
@@ -127,6 +129,7 @@ AFFECTS: A, Flags
 
 
 NAME: HASCHAR
+-------------
 
 DESC: Checks whether there's a character available from PS/2 Keyboard or serial
       terminal.
@@ -142,6 +145,7 @@ AFFECTS: A, Flags
 ================
 
 NAME: SERIAL_TX
+---------------
 
 DESC: Sends a character over the serial line.
 
@@ -153,19 +157,8 @@ AFFECTS: A, Flags
 
 
 
-NAME: SERIAL_RX
-
-DESC: Reads a character from the serial line.
-
-HOW TO USE: Load register C=4, and exec RST 0x20.
-
-RETURNS: Character in A, flag NZ, if valid character, flag Z otherwise.
-
-AFFECTS: A, Flags
-
-
-
 NAME: SERIAL_RX_AVAIL
+---------------------
 
 DESC: Checks whether there's a character available from the serial line.
 
@@ -174,6 +167,104 @@ HOW TO USE: Load register C=2, and exec RST 0x20.
 RETURNS: Flag NZ if available, flag Z otherwise.
 
 AFFECTS: A, Flags
+
+
+
+NAME: SERIAL_RX
+---------------
+
+DESC: Reads a character from the serial line.
+
+HOW TO USE: Load register C=3, and exec RST 0x20.
+
+RETURNS: Character in A, flag NZ, if valid character, flag Z otherwise.
+
+AFFECTS: A, Flags
+
+
+
+4.3. LCD DISPLAY
+================
+
+NAME: LCD_INIT
+--------------
+
+DESC: Initializes the LCD controller.
+
+HOW TO USE: Load register C=8, and exec RST 0x20.
+
+RETURNS: Nothing
+
+AFFECTS: A, B, C, Flags
+
+
+
+NAME: LCD_CLEAR
+---------------
+
+DESC: Clears the LCD screen.
+
+HOW TO USE: Load register C=9, and exec RST 0x20.
+
+RETURNS: Nothing
+
+AFFECTS: A, B, C, Flags
+
+
+
+NAME: LCD_HOME
+--------------
+
+DESC: Sets the next print position to line 1 column 1 in the LCD screen.
+
+HOW TO USE: Load register C=10, and exec RST 0x20.
+
+RETURNS: Nothing
+
+AFFECTS: A, B, C, Flags
+
+
+
+NAME: LCD_HOME2
+---------------
+
+DESC: Sets the next print position to line 2 column 1 in the LCD screen.
+
+HOW TO USE: Load register C=11, and exec RST 0x20.
+
+RETURNS: Nothing
+
+AFFECTS: A, B, C, Flags
+
+
+
+NAME: LCD_WRITE
+---------------
+
+DESC: Writes a character at the current screen position and advances to the
+      next position.
+
+HOW TO USE: Load register C=12, and A with the character and exec RST 0x20.
+
+RETURNS: Nothing
+
+AFFECTS: A, B, C, Flags
+
+
+
+NAME: LCD_WMSG
+--------------
+
+DESC: Writes a string at the current screen position and advances to the
+      next position after the last character.
+
+HOW TO USE: Load register C=13, and HL with the address of the character 
+            sequence and exec RST 0x20. The sequence must have a 0x00 byte to
+            mark its end.
+
+RETURNS: Nothing
+
+AFFECTS: A, B, C, H, L, Flags
 
 
 ================================================================================
