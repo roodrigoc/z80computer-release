@@ -16,9 +16,8 @@
 ; --- Hardware Mapping ---
 PORTBUTTONS     .equ 0x00 ;PORTX address (Read) 
 PORTLEDS        .equ 0x00 ;PORTA address (Write)
-PORTB           .equ 0x10 ;PORTB address (Write)
-EN		.equ	0x01				;LCD enable pin (PORTB bit 1)
-RS		.equ	0x01				;LCD RS pin (uses or logic)
+PORTDISP        .equ 0x10 ;PORTB address (Write)
+
 
 ROMBASE         .equ 0
 ROMSZ           .equ 0x2000
@@ -40,15 +39,15 @@ STACKTOP .equ	(RAMBASE+RAMSZ)
 ; =============================================================================
 ; --- Main Program ---
 
-	ld	sp,#STACKTOP		;pilha de memória 
-	call	lcd_begin		;inicializa LCD no modo 4 bits		
-	ld	d,#2			;carrega 2d em d 
-	call	dx100ms			;aguarda 500ms 				
-	ld	b,#0x0C			;desliga cursor e blink 
-	call	lcd_cmd 		;envia comando 
-	call	msg_init 		;escreve título "Alpha Z80" 
-	ld	d,#10			;carrega 10d em d 
-	call	dx100ms			;aguarda 1 seg. 
+	ld	sp,#STACKTOP
+	call	lcd_init
+
+	call	msg_init
+	ld	b,#66
+wait1s:	push	bc
+	call	delay_15ms
+	pop	bc
+	djnz	wait1s
 
 	call	lcd_clear
 
@@ -133,15 +132,15 @@ ramhierr:
 	inc	ix
 
 testra5:
-	ld	b,#'R'
+	ld	a,#'R'
 	call 	lcd_write 
-	ld	b,#'A'
+	ld	a,#'A'
 	call 	lcd_write 
-	ld	b,#'M'
+	ld	a,#'M'
 	call 	lcd_write 
-	ld	b,#'0'
+	ld	a,#'0'
 	call 	lcd_write 
-	ld	b,#':'
+	ld	a,#':'
 	call 	lcd_write 
 
 	push	ix
@@ -149,32 +148,32 @@ testra5:
 	bit	0,l
 	jr	nz,err_raml
 
-	ld	b,#'O'
+	ld	a,#'O'
 	call 	lcd_write 
-	ld	b,#'K'
+	ld	a,#'K'
 	call 	lcd_write 
 	jr	ramh
 
 err_raml:
-	ld	b,#'E'
+	ld	a,#'E'
 	call 	lcd_write 
-	ld	b,#'R'
+	ld	a,#'R'
 	call 	lcd_write 
 
 ramh:
-	ld	b,#' '
+	ld	a,#' '
 	call 	lcd_write 
-	ld	b,#' '
+	ld	a,#' '
 	call 	lcd_write 
-	ld	b,#'R'
+	ld	a,#'R'
 	call 	lcd_write 
-	ld	b,#'A'
+	ld	a,#'A'
 	call 	lcd_write 
-	ld	b,#'M'
+	ld	a,#'M'
 	call 	lcd_write 
-	ld	b,#'1'
+	ld	a,#'1'
 	call 	lcd_write 
-	ld	b,#':'
+	ld	a,#':'
 	call 	lcd_write 
 
 	push	ix
@@ -182,191 +181,207 @@ ramh:
 	bit	1,l
 	jr	nz,err_ramh
 
-	ld	b,#'O'
+	ld	a,#'O'
 	call 	lcd_write 
-	ld	b,#'K'
+	ld	a,#'K'
 	call 	lcd_write 
 	ret
 
 err_ramh:
-	ld	b,#'E'
+	ld	a,#'E'
 	call 	lcd_write 
-	ld	b,#'R'
+	ld	a,#'R'
 	jp 	lcd_write 
 
 	ret
-	
-; =============================================================================
-; --- Inicializa LCD modo de 4 bits ---
-lcd_begin:
-		ld		d,#50		;carrega 50d em d 
-		call	dx1ms			;tempo para estabilização (50ms)
-		ld		b,#0x30		;protocolo de inicialização
-		ld		c,#0x00		;envio de comando
-		call	send_nibble		;envia 30h para o LCD
-		ld		d,#5		;carrega 5d em d 
-		call	dx1ms			;aguarda 5ms (tempo superior ao datasheet)
-		ld		b,#0x30		;protocolo de inicialização
-		ld		c,#0x00		;envio de comando
-		call	send_nibble		;envia 30h para o LCD		
-		call	d1ms 			;aguarda 1ms (tempo superior ao datasheet)
-		ld		b,#0x30		;protocolo de inicialização
-		ld		c,#0x00		;envio de comando
-		call	send_nibble		;envia 30h para o LCD
-		ld		b,#0x20		;LCD no modo 4 bits
-		ld		c,#0x00		;envio de comando
-		call	send_nibble		;envia 30h para o LCD
-		ld		b,#0x28		;5x8 pontos por caractere, duas linhas
-		call	lcd_cmd			;envia comando 28h
-		ld		b,#0x0F		;liga display, cursor e blink
-		call	lcd_cmd			;envia comando 0Fh
-		ld		b,#0x01		;limpa LCD
-		call	lcd_cmd			;envia comando 01h
-		ld		b,#0x06		;modo de incremento de endereço para direita, movendo apenas o cursor 
-		call	lcd_cmd			;envia comando 06h
-		call	lcd_clear		;limpa o display
-		ret				;retorno da sub-rotina
-		
 
-; =============================================================================
-; --- Envia Comandos / Escreve no LCD ---
-lcd_cmd:
-		ld		c,#0x00
-		jr		send_byte
-lcd_write:
-		ld		c,#0x01			;01h para envio de caracteres
-send_byte:		
-		call	send_nibble		;envia nibble mais significativo
-		ld		a,b				;carrega conteúdo de b em acc
-		rla						;rotaciona acc para esquerda 4x
-		rla						;
-		rla						;
-		rla						;
-		and		#0xF0			;máscara para preservar nibble mais significativo
-		ld		b,a				;atualiza b
-		call	send_nibble		;envia nibble menos significativo
-		ret						;retorno da sub-rotina
-		
-
-;==============================================================================
-; --- Envia cada nibble separadamente e gera pulso de enable ---
-send_nibble:
-		ld		a,#0x00			;zera conteúdo de ACC
-		bit		0,c				;bit 0 de c em LOW?
-		jp		z,rs_clr		;sim, desvia para manter RS limpo
-		ld		a,#(0x00|RS)		;não, seta bit RS
-rs_clr:
-		bit		7,b				;bit7 de B em LOW?
-		jp		z,b6aval		;sim, desvia para avaliar bit6
-		set		7,a				;não, seta bit 7 de acc
-b6aval:
-		bit		6,b				;bit6 de B em LOW?
-		jp		z,b5aval		;sim, desvia para avaliar bit5
-		set		6,a				;não, seta bit 6 de acc
-b5aval:
-		bit		5,b				;bit5 de B em LOW?
-		jp		z,b4aval		;sim, desvia para avaliar bit4
-		set		5,a				;não, seta bit 5 de acc
-b4aval:
-		bit		4,b				;bit4 de B em LOW?
-		jp		z,lcd_en		;sim, desvia para pulso de enable
-		set		4,a				;não, set bit 4 de acc
-lcd_en:
-		set		EN,a			;pino enable em HIGH
-		out		(PORTB),a		;escreve no PORTB 
-		ld		d,#2				;carrega 2d em d 
-		call    dx1ms           ;aguarda 2ms 
-		res		EN,a			;pino enable em LOW 
-		out		(PORTB),a 		;escreve no PORTB 
-		ld		d,#2				;carrega 2d em d
-		call    dx1ms           ;aguarda 2ms 		
-		ret						;retorno da sub-rotina
-		
-
-; =============================================================================
-; --- Limpa LCD ---
-lcd_clear:
-		ld		b,#0x02		;return home
-		call	lcd_cmd			;envia 02h para o LCD
-		ld		b,#0x01		;limpa o display
-		call	lcd_cmd			;envia 01h para o LCD
-		ret						;retorno da sub-rotina		
-		
-
-; =============================================================================
-; --- Imprime o título na segunda linha do LCD ---
 msg_init:
-		ld		b,#0xC0		;posiciona cursor na linha 1, coluna 0
-		call	lcd_cmd			;envia comando 
-		ld		b,#'C' 			;imprime "Alpha Z80" 
-		call	lcd_write 
-		ld		b,#'o'
-		call 	lcd_write 
-		ld		b,#'r'
-		call 	lcd_write 
-		ld		b,#'e'
-		call 	lcd_write 
-		ld		b,#'t'
-		call 	lcd_write
-		ld		b,#'e'
-		call 	lcd_write 	
-		ld		b,#'s'
-		call 	lcd_write 
-		ld		b,#'t'
-		call 	lcd_write 		
-		ld		b,#'2'
-		call 	lcd_write 		
-		ld		b,#0x80		;posiciona cursor na linha 0, coluna 0
-		call	lcd_cmd			;envia comando 
-		ret						;retorna da sub-rotina 
+	ld	hl,#msgtitle
+	jp	lcd_wmsg
 
+msgtitle:
+	.ascii	"Coretest2\0"
 
-; =============================================================================
-; --- dx1ms multiplies 1ms delay ---	
-dx1ms:				
-		call	d1ms			; 1ms (delay time)
-		dec 	d 				; 1.0µs    4 T States 
-		jp 		nz,dx1ms  		; 2.5µs   10 T States 		
-		ret						; 2.5µs   10 T States 
+	;///////////////////////////////////////////////////////////////////////
+	;//////////////////////   LCD DISPLAY FUNCTIONS   //////////////////////
+	;///////////////////////////////////////////////////////////////////////
 
+lcd_write:
+	;RS R/W DB7 DB6 DB5 DB4
+	;1   0   D7  D6  D5  D4
+	push	bc
 
-; =============================================================================
-; --- aprox. 1ms delay (clock 4MHz) ---
-d1ms:							; 4.25µs  17 T States (call)
-		push	bc				; 2.75µs  11 T States 
-		ld		b,#0xDB			; 1.75 µs  7 T States 
-dloop:
-		dec		b				; 1.0µs    4 T States 
-		nop 					; 1.0µs    4 T States 
-		jp		nz,dloop		; 2.5µs   10 T States 								
-		pop		bc				; 2.5µs   10 T States 
-		ret						; 2.5µs   10 T States 
+	ld	c,a
+	and	#0xf0
+	or	#0x01
+	call	lcd_out
 
+	;RS R/W DB7 DB6 DB5 DB4
+	;1   0   D3  D2  D1  D0
+	ld	a,c		
+	sla	a
+	sla	a
+	sla	a
+	sla	a
+	or	#0x01
+	call	lcd_out
 
-; =============================================================================
-; --- dx100ms multiplies 100ms delay ---	
-dx100ms: 
-		call	d100ms			; 1ms (delay time)
-		dec 	d 				; 1.0µs    4 T States 
-		jp 		nz,dx100ms 		; 2.5µs   10 T States 	
-		ret						; 2.5µs   10 T States 
-		
-		
-; =============================================================================
-; --- aprox. 100ms delay (clock 4MHz) ---
-d100ms:							; 4.25µs  17 T States
-		push	bc 				; 2.75µs  11 T States 
-		ld		b,#0x97			; 1.75µs   7 T States 
-aux1:
-		ld		c,#0xBD			; 1.75µs   7 T States 
-aux2:
-		dec		c				; 1.0µs    4 T States 
-		jp		nz,aux2 		; 2.5µs   10 T States 
-		dec		b 				; 1.0µs    4 T States 
-		jp		nz,aux1 		; 2.5µs   10 T States 
-		pop		bc 				; 2.5µs   10 T States 
-		ret 					; 2.5µs   10 T States 
+	call	delay_5ms
 
+	pop	bc
+
+	ret
+
+;///////////////////////////////////////////////////////////////////////////////
+lcd_wmsg:	
+	ld	a,(hl)
+	or	a
+	ret	z
+	call	lcd_write
+	inc	hl
+	jr	lcd_wmsg
+
+;///////////////////////////////////////////////////////////////////////////////
+lcd_home:
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   0   0
+	ld	a,#0b00000000
+	call	lcd_out
+	;RS R/W DB3 DB2 DB1 DB0
+	;0   0   0   0   1   0
+	ld	a,#0b00100000
+	call	lcd_out
+
+	call	delay_5ms
+	ret
+
+;///////////////////////////////////////////////////////////////////////////////
+lcd_home2:
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   1   1   0   0
+	ld	a,#0b11000000
+	call	lcd_out
+	;RS R/W DB3 DB2 DB1 DB0
+	;0   0   0   0   0   0
+	ld	a,#0b00000000
+	call	lcd_out
+
+	call	delay_5ms
+	ret
+
+;///////////////////////////////////////////////////////////////////////////////
+lcd_clear:
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   0   0
+	ld	a,#0b00000000
+	call	lcd_out
+	;RS R/W DB3 DB2 DB1 DB0
+	;0   0   0   0   0   1
+	ld	a,#0b00010000
+	call	lcd_out
+
+	call	delay_5ms
+	ret
+
+;///////////////////////////////////////////////////////////////////////////////
+lcd_init:
+	call	delay_15ms
+
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   1   1
+	ld	a,#0b00110000
+	call	lcd_out
+	call	delay_5ms
+	ld	a,#0b00110000
+	call	lcd_out
+	call	delay_5ms
+
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   1   0
+	ld	a,#0b00100000		; Set 4 bit mode
+	call	lcd_out
+
+	call	delay_5ms
+
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   1   0
+	ld	a,#0b00100000		; Will set N F
+	call	lcd_out
+	;RS R/W DB3 DB2 DB1 DB0
+	;0   0   N   F   x   x  N=1 F=1
+	ld	a,#0b11000000
+	call	lcd_out
+
+	call	delay_5ms
+
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   0   0
+	ld	a,#0b00000000		; Will turn display on
+	call	lcd_out
+	;RS R/W DB3 DB2 DB1 DB0
+	;0   0   1   1   0   0
+	ld	a,#0b11000000
+	call	lcd_out
+
+	call	delay_5ms
+
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   0   0
+	ld	a,#0b00000000		; Will clear display
+	call	lcd_out
+	;RS R/W DB3 DB2 DB1 DB0
+	;0   0   0   0   0   1
+	ld	a,#0b00010000
+	call	lcd_out
+
+	call	delay_5ms
+
+	;RS R/W DB7 DB6 DB5 DB4
+	;0   0   0   0   0   0
+	ld	a,#0b00000000		; Will set Increment mode
+	call	lcd_out		; No shift
+	;RS R/W DB3 DB2 DB1 DB0
+	;0   0   0   1   1   0
+	ld	a,#0b01100000
+	call	lcd_out
+
+	call	delay_5ms
+
+	call	lcd_home
+	ret
+
+;///////////////////////////////////////////////////////////////////////////////
+lcd_out:
+	out	(PORTDISP),a
+	nop
+	nop
+	set	1,a
+	out	(PORTDISP),a
+	nop
+	nop
+	res	1,a
+	out	(PORTDISP),a
+	ret
+
+;///////////////////////////////////////////////////////////////////////////////
+delay_5ms:	
+	ld	bc,#768		; 2.5us
+delay_5ms_a:	
+	dec	bc		; 1.5 us
+	ld	a,b		; 1 us
+	or	c		; 1 us
+	jr	nz,delay_5ms_a	; 3 us
+	ret			; 2.5 us
+
+;///////////////////////////////////////////////////////////////////////////////
+delay_15ms:	
+	ld	bc,#2307	; 2.5us
+delay_15ms_a:	
+	dec	bc		; 1.5 us
+	ld	a,b		; 1 us
+	or	c		; 1 us
+	jr	nz,delay_15ms_a	; 3 us
+	ret			; 2.5 us
 
 ;=======================================================
 ; --- Final do Programa ---
