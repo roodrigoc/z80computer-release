@@ -1,6 +1,6 @@
 ================================================================================
 KRAFT80 TECHNICAL INFO
-Revision 1.0.1 - 2025-09-22
+Revision 1.0.2 - 2025-09-25
 © 2025, ARMCoder
 
 ================================================================================
@@ -440,12 +440,22 @@ present, will no longer be read.
 found no problems at all.
 
 
+5.7. START-UP: AUTOMATIC XMODEM DOWNLOAD
+========================================
+
+  You can boot the Kraft80 in automatic XMODEM download by holding the button
+SW7 while resetting/powering up the board. Sysmon will initiate the XMODEM
+protocol immediately, and a message will be shown in the LCD display.
+
+  Send the executable from the PC using the USB cable as always.
+
+  At the transfer end, the loaded program will be executed immediately.
+
+
 6. FINAL CONSIDERATIONS
 =======================
 
   There are many more info on how the Kraft 80's subsystems work, they will be
 supplied in separate documents.
-
-
 
 

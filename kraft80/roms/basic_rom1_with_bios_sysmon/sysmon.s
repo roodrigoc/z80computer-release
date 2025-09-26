@@ -13,12 +13,19 @@
 
 	.include "defines.s"
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; LEDS & BUTTONS
+PORTLEDS	.equ	0x00
+PORTBUTTONS	.equ	0x00
+PORTDISP	.equ	0x10
+
 ;RAMBASE	.equ	0x4000
 SYSM_BUFSZ	.equ	128
 SYSM_BUF	.equ	RAMBASE
 SYSM_BUFPTR	.equ	SYSM_BUF+SYSM_BUFSZ
 SYSM_LASTDM 	.equ	SYSM_BUFPTR+1
 SYSM_LASTED 	.equ	SYSM_LASTDM+2
+SYSM_FLAGS	.equ	SYSM_LASTED+2
 
 SOH 		.equ	1
 EOT		.equ	4
@@ -47,6 +54,25 @@ sysmon:
 	ld	hl,#RAMTOP
 	ld	(SYSM_LASTDM),hl
 	ld	(SYSM_LASTED),hl
+
+	xor	a
+	ld	(SYSM_FLAGS),a
+	in	a,(PORTBUTTONS)
+	bit	6,a
+	jr	nz,sysmon_loop
+
+	ld	a,#1
+	ld	(SYSM_FLAGS),a
+	
+	ld	c,#9
+	rst	0x20
+	ld	c,#13
+	ld	hl,#msg_ld_xmodem
+	rst	0x20
+	jp	load_xmodem
+	
+msg_ld_xmodem:
+	.ascii	"Loading XMODEM.\0"
 
 sysmon_loop:
 	xor	a
@@ -456,7 +482,20 @@ loop_xmodem:
 	ld	a,#ACK
 	ld	c,#1	; TX Char
 	rst	0x20
-	ret
+
+	ld	a,(SYSM_FLAGS)
+	bit	0,a
+	ret	z
+
+	ld	c,#9
+	rst	0x20
+	ld	c,#13
+	ld	hl,#msg_run
+	rst	0x20
+	jp	RAMTOP
+
+msg_run:
+	.ascii	"Run...\0"
 
 load_xmodem1:
 	cp	#ESC
