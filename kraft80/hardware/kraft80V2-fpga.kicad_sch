@@ -6,7 +6,7 @@
 	(paper "A4")
 	(title_block
 		(title "Kraft 80 V2 by ARMCoder")
-		(date "2025-09-02")
+		(date "2025-10-01")
 		(rev "2.0")
 		(comment 1 "www.github.com/ARMCoderBR")
 	)
@@ -4556,12 +4556,6 @@
 		(uuid "66b924b7-7add-45e5-a0eb-3e7fe4bbc023")
 	)
 	(junction
-		(at 261.62 66.04)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "6ef33f79-d316-49f8-b788-8c69108a3ff8")
-	)
-	(junction
 		(at 194.31 123.19)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -4590,6 +4584,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "b9f4722c-3100-4b96-be8f-90a1191cb667")
+	)
+	(junction
+		(at 271.78 68.58)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "c29e8e64-bc5d-4ec2-9a48-864f47f4f459")
 	)
 	(junction
 		(at 232.41 134.62)
@@ -6349,16 +6349,6 @@
 	)
 	(wire
 		(pts
-			(xy 261.62 66.04) (xy 261.62 69.85)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "6f724599-015b-4290-a91f-85d28aa3f103")
-	)
-	(wire
-		(pts
 			(xy 88.9 139.7) (xy 99.06 139.7)
 		)
 		(stroke
@@ -7009,6 +6999,16 @@
 	)
 	(wire
 		(pts
+			(xy 261.62 68.58) (xy 271.78 68.58)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9dc57927-7b16-4805-85e7-2ea9c11fa948")
+	)
+	(wire
+		(pts
 			(xy 15.24 54.61) (xy 19.05 54.61)
 		)
 		(stroke
@@ -7616,6 +7616,16 @@
 			(type default)
 		)
 		(uuid "d5afbd88-a85f-4ba2-8b5f-c19af26b7d1b")
+	)
+	(wire
+		(pts
+			(xy 261.62 69.85) (xy 261.62 68.58)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d81bf865-87e9-4239-be9a-7978a77cf98c")
 	)
 	(wire
 		(pts
@@ -9850,7 +9860,7 @@
 		(dnp no)
 		(uuid "38c23f1a-dbf4-457f-8907-a59fb52d008f")
 		(property "Reference" "R20"
-			(at 262.89 70.104 0)
+			(at 263.144 72.39 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9858,8 +9868,8 @@
 				(justify left)
 			)
 		)
-		(property "Value" "10k"
-			(at 262.89 72.898 0)
+		(property "Value" "2k"
+			(at 263.144 74.422 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11348,7 +11358,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "100R"
+		(property "Value" "22R"
 			(at 270.51 64.516 0)
 			(effects
 				(font
