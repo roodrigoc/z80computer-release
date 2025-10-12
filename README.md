@@ -1,6 +1,6 @@
 # Kraft 80
 A Z80-based computer for nostalgic enthusiasts\
-©2025 - ARMCoder
+©2025 - ARMCoder\
 UPDATED 2025 - October 12
 
 <IMG SRC="https://github.com/ARMCoderBR/z80computer-release/blob/main/kraft80/kraft80-1.jpg?raw=true" width=600>
